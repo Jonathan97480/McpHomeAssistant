@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "homeassistant": {
+      "name": "Home Assistant MCP Server",
+      "command": "homeassistant-mcp-server",
+      "description": "Control and monitor your Home Assistant smart home devices",
+      "env": {
+        "HASS_URL": "http://192.168.1.22:8123",
+        "HASS_TOKEN": "your_token_here"
+      },
+      "timeout": 30,
+      "autoStart": true
+    }
+  }
+}

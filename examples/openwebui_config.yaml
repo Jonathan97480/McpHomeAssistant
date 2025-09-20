@@ -1,0 +1,35 @@
+version: "1.0"
+
+servers:
+  homeassistant:
+    name: "Home Assistant MCP Server"
+    command: "homeassistant-mcp-server"
+    description: "Control and monitor your Home Assistant smart home"
+    env:
+      HASS_URL: "http://192.168.1.22:8123"
+      HASS_TOKEN: "your_token_here"
+    capabilities:
+      - "device_control"
+      - "sensor_reading"
+      - "automation_creation"
+    health_check:
+      enabled: true
+      interval: 30
+      timeout: 10
+
+ui:
+  features:
+    chat: true
+    tools: true
+    functions: true
+  
+  tools:
+    homeassistant:
+      enabled: true
+      icon: "🏠"
+      category: "Smart Home"
+      
+security:
+  sandbox: false
+  allow_network: true
+  environment_isolation: true

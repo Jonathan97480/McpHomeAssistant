@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "homeassistant": {
+      "command": "homeassistant-mcp-server",
+      "args": [],
+      "env": {
+        "HASS_URL": "http://192.168.1.22:8123",
+        "HASS_TOKEN": "your_token_here"
+      },
+      "cwd": ".",
+      "alwaysAllow": ["get_entities", "get_entity_state", "call_service"]
+    }
+  },
+  "allowedModels": ["*"],
+  "embeddingsProvider": {
+    "provider": "openai-compatible"
+  },
+  "rerankerProvider": {
+    "name": "cohere"
+  }
+}
