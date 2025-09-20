@@ -50,5 +50,12 @@ test_results/
 backup/
 *.backup
 
+# Temporary development files
+*_temp.py
+*_dev.py
+fix_*.py
+start_dev_*.py
+run_*.py
+
 # Claude Desktop
 claude_desktop_config_local.json

@@ -6,6 +6,8 @@
 
 A powerful Model Context Protocol (MCP) server for integrating Home Assistant with AI agents like Claude Desktop.
 
+> **🍓 Raspberry Pi Ready!** This server includes a standalone HTTP mode specifically designed for easy deployment on Raspberry Pi 3B+ alongside Home Assistant. The `install.sh` script provides automated installation optimized for Pi hardware.
+
 [🇫🇷 Version française](#version-française)
 
 ## ✨ Features
@@ -18,6 +20,87 @@ A powerful Model Context Protocol (MCP) server for integrating Home Assistant wi
 - 🛠️ **Service Calls** : Call any Home Assistant service
 - 🤖 **Smart Automations** : Generate intelligent YAML automations
 
+## 🌐 HTTP Server Mode
+
+In addition to MCP protocol, this server can run as a standalone HTTP REST API server, perfect for:
+
+- 🍓 **Raspberry Pi deployment** alongside Home Assistant
+- 🔗 **Web applications** and custom integrations  
+- 🚀 **Microservices** architecture
+- 📱 **Mobile apps** and third-party tools
+- 🤖 **AI agents** that don't support MCP protocol directly
+
+**Why use HTTP Server mode?**
+- **Universal compatibility**: Any programming language or tool can connect via HTTP
+- **Direct deployment**: Install directly on your Raspberry Pi running Home Assistant
+- **No MCP client required**: Works with any HTTP client (curl, Postman, web browsers)
+- **REST API standard**: Easy integration with existing systems and workflows
+- **Standalone operation**: Independent service that doesn't require MCP infrastructure
+
+### HTTP Endpoints
+
+The HTTP server provides a complete REST API interface to Home Assistant:
+
+- `GET /health` - Server health check and Home Assistant connectivity status
+- `GET /api/entities` - List all entities (with optional domain filtering like `?domain=light`)
+- `GET /api/entities/{entity_id}` - Get specific entity state and attributes
+- `POST /api/services/call` - Call Home Assistant services (turn on/off devices, etc.)
+- `GET /api/history` - Get entity history data with time range filtering
+
+**Use Cases:**
+- **Web dashboards**: Build custom web interfaces for Home Assistant
+- **Mobile apps**: Create native mobile applications with HTTP API
+- **Automation scripts**: Use any programming language to automate your home
+- **Third-party integrations**: Connect non-MCP services to Home Assistant
+- **Development testing**: Quick API testing with curl or Postman
+
+### Quick HTTP Server Start
+
+```bash
+# Install dependencies
+pip install aiohttp python-dotenv
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your Home Assistant URL and token
+
+# Start HTTP server
+python http_server.py
+```
+
+Server runs on `http://localhost:3002` by default and provides a complete REST API interface.
+
+**Example API calls:**
+```bash
+# Check server health
+curl http://localhost:3002/health
+
+# List all lights
+curl http://localhost:3002/api/entities?domain=light
+
+# Turn on a light
+curl -X POST http://localhost:3002/api/services/call \
+  -H "Content-Type: application/json" \
+  -d '{"domain": "light", "service": "turn_on", "target": {"entity_id": "light.living_room"}}'
+```
+
+📖 **[Complete HTTP Server Guide](docs/HTTP_SERVER_README.md)**
+
+### 🎯 HTTP vs MCP: When to use which?
+
+**Use HTTP Server when:**
+- 🍓 Installing directly on Raspberry Pi 3B+
+- 🌐 Building web applications or mobile apps
+- 🔧 Integrating with non-MCP tools and services
+- 🚀 Need universal compatibility across programming languages
+- 📊 Creating custom dashboards or monitoring systems
+
+**Use MCP Server when:**
+- 💻 Working with AI agents that support MCP (Claude Desktop, etc.)
+- 🤖 Need structured tool-based interactions
+- 🔄 Want automatic tool discovery and schema validation
+- 📝 Prefer conversation-based device control
+
 ## 📁 Project Structure
 
 ```
@@ -28,6 +111,7 @@ homeassistant-mcp-server/
 ├── tests/                            # Test and analysis scripts
 │   ├── test_connection.py            # Basic connection test
 │   ├── test_mcp_tools.py             # Complete tools test
+│   ├── test_http_server.py           # HTTP server tests
 │   ├── analyze_energy.py             # Energy analysis
 │   └── analyze_smart_plugs.py        # Smart plugs analysis
 ├── examples/                         # Examples and configuration
@@ -35,7 +119,14 @@ homeassistant-mcp-server/
 │   └── smart_plug_automations.py     # Smart plug automations
 ├── docs/                             # Documentation
 │   ├── QUICKSTART.md                 # Quick start guide
+│   ├── HTTP_SERVER_README.md         # HTTP server documentation
+│   ├── RASPBERRY_PI_INSTALL.md       # Raspberry Pi installation
 │   └── ARCHITECTURE.md               # Technical architecture
+├── scripts/                          # Utility scripts
+│   ├── launcher.py                   # Service launcher wrapper
+│   └── README.md                     # Scripts documentation
+├── http_server.py                    # Standalone HTTP server
+├── install.sh                        # Raspberry Pi installation script
 ├── .env.example                      # Configuration example
 └── README.md                         # This file
 ```
@@ -45,11 +136,33 @@ homeassistant-mcp-server/
 ### Quick Start Options
 
 #### 🍓 **Raspberry Pi Installation (Recommended)**
-Install directly on your Raspberry Pi alongside Home Assistant:
+Install directly on your Raspberry Pi 3B+ alongside Home Assistant:
 
 ```bash
+# Download and run the installation script
 curl -sSL https://raw.githubusercontent.com/Jonathan97480/McpHomeAssistant/master/install.sh | bash
+
+# Or download and customize before running
+wget https://raw.githubusercontent.com/Jonathan97480/McpHomeAssistant/master/install.sh
+chmod +x install.sh
+./install.sh
 ```
+
+**🎯 Optimized for Raspberry Pi 3B+:**
+- ✅ **HTTP Server Setup**: Installs the standalone HTTP server for easy AI integration
+- ✅ **Interactive Configuration**: Prompts for Home Assistant token and URL during installation
+- ✅ **Systemd Service**: Auto-configures system service for automatic startup
+- ✅ **Security**: Proper file permissions and service isolation
+- ✅ **Port 3002**: HTTP REST API accessible from external machines
+- ✅ **Resource Optimized**: Lightweight deployment suitable for Pi 3B+ hardware
+- ✅ **Debian Compatible**: Tested on Raspberry Pi OS (Debian-based)
+
+**System Requirements:**
+- Raspberry Pi 3B+ or newer
+- Raspberry Pi OS (Debian 11+ recommended)
+- Home Assistant running on the same Pi or network
+- Python 3.9+ (automatically installed if needed)
+- At least 512MB available RAM
 
 📖 **[Complete Raspberry Pi Guide](docs/RASPBERRY_PI_INSTALL.md)**
 
@@ -363,6 +476,23 @@ Un serveur Model Context Protocol (MCP) puissant pour intégrer Home Assistant a
 - 🛠️ **Services** : Appelez n'importe quel service Home Assistant
 - 🤖 **Automatisations** : Générez des automatisations YAML intelligentes
 
+## 🌐 Mode Serveur HTTP
+
+En plus du protocole MCP, ce serveur peut fonctionner comme un serveur HTTP REST API autonome, parfait pour :
+
+- 🍓 **Déploiement Raspberry Pi** aux côtés de Home Assistant
+- 🔗 **Applications web** et intégrations personnalisées
+- 🚀 **Architecture microservices** 
+- 📱 **Applications mobiles** et outils tiers
+- 🤖 **Agents IA** qui ne supportent pas directement le protocole MCP
+
+**Pourquoi utiliser le mode Serveur HTTP ?**
+- **Compatibilité universelle** : N'importe quel langage ou outil peut se connecter via HTTP
+- **Déploiement direct** : Installation directe sur votre Raspberry Pi 3B+ avec Home Assistant
+- **Pas de client MCP requis** : Fonctionne avec n'importe quel client HTTP (curl, Postman, navigateurs)
+- **Standard REST API** : Intégration facile avec systèmes et workflows existants
+- **Fonctionnement autonome** : Service indépendant ne nécessitant pas d'infrastructure MCP
+
 ## 📁 Structure du Projet
 
 ```
@@ -390,11 +520,27 @@ homeassistant-mcp-server/
 ### Options de Démarrage Rapide
 
 #### 🍓 **Installation Raspberry Pi (Recommandée)**
-Installez directement sur votre Raspberry Pi avec Home Assistant :
+Installez directement sur votre Raspberry Pi 3B+ avec Home Assistant :
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/Jonathan97480/McpHomeAssistant/master/install.sh | bash
 ```
+
+**🎯 Optimisé pour Raspberry Pi 3B+ :**
+- ✅ **Configuration Serveur HTTP** : Installe le serveur HTTP autonome pour intégration IA facile
+- ✅ **Configuration Interactive** : Demande le token et URL Home Assistant pendant l'installation
+- ✅ **Service Systemd** : Configure automatiquement le service système pour démarrage automatique
+- ✅ **Sécurité** : Permissions de fichiers appropriées et isolation du service
+- ✅ **Port 3002** : API REST HTTP accessible depuis des machines externes
+- ✅ **Optimisé Ressources** : Déploiement léger adapté au matériel Pi 3B+
+- ✅ **Compatible Debian** : Testé sur Raspberry Pi OS (basé Debian)
+
+**Configuration Système Requise :**
+- Raspberry Pi 3B+ ou plus récent
+- Raspberry Pi OS (Debian 11+ recommandé)
+- Home Assistant fonctionnant sur le même Pi ou réseau
+- Python 3.9+ (installé automatiquement si nécessaire)
+- Au moins 512MB de RAM disponible
 
 📖 **[Guide Complet Raspberry Pi](docs/RASPBERRY_PI_INSTALL.md)**
 

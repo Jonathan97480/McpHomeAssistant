@@ -25,6 +25,7 @@ INSTALL_DIR="/opt/homeassistant-mcp-server"
 SERVICE_NAME="homeassistant-mcp-server"
 USER="homeassistant"
 PYTHON_VERSION="3.11"
+HTTP_SERVER_PORT=3002
 
 # Logging function
 log() {
@@ -119,37 +120,70 @@ create_install_dir() {
 }
 
 # Download and install the MCP server
+# Install MCP server
 install_mcp_server() {
-    log "Downloading Home Assistant MCP Server..."
+    log "Installing Home Assistant MCP Server..."
+    
+    # Clone repository or copy files
+    if [[ ! -d "$INSTALL_DIR" ]]; then
+        sudo mkdir -p "$INSTALL_DIR"
+        sudo chown $USER:$USER "$INSTALL_DIR"
+    fi
     
     cd "$INSTALL_DIR"
-    git clone https://github.com/Jonathan97480/McpHomeAssistant.git .
     
+    # Copy files (assuming they're in current directory when script is run)
+    if [[ -f "../http_server.py" ]]; then
+        cp ../http_server.py .
+        cp ../requirements.txt .
+        cp -r ../homeassistant_mcp_server .
+        cp -r ../scripts .
+        cp -r ../tests . 2>/dev/null || true
+        cp -r ../docs . 2>/dev/null || true
+    else
+        error "HTTP server files not found. Please run this script from the project directory."
+        exit 1
+    fi
+    
+    # Create virtual environment
     log "Creating Python virtual environment..."
-    python3 -m venv venv
+    $PYTHON_VERSION -m venv venv
     source venv/bin/activate
     
-    log "Installing Python dependencies..."
+    # Upgrade pip
+    log "Upgrading pip..."
     pip install --upgrade pip
-    pip install -e .
     
-    log "MCP Server installed ✓"
+    # Install dependencies
+    log "Installing Python dependencies..."
+    if [[ -f "requirements.txt" ]]; then
+        pip install -r requirements.txt
+    else
+        # Fallback to manual installation
+        pip install aiohttp python-dotenv aiofiles
+    fi
+    
+    # Install MCP server package
+    if [[ -d "homeassistant_mcp_server" ]]; then
+        pip install -e .
+    fi
+    
+    log "MCP Server installation completed ✓"
 }
 
 # Create configuration file
 create_config() {
     log "Creating configuration file..."
     
-    CONFIG_FILE="$INSTALL_DIR/.env"
-    
+    # Create .env file
     cat > "$CONFIG_FILE" << EOF
-# Home Assistant MCP Server Configuration
+# Home Assistant Configuration
 HASS_URL=http://localhost:8123
-HASS_TOKEN=your_token_here
+HASS_TOKEN=
 
-# Server Settings
-MCP_SERVER_HOST=0.0.0.0
-MCP_SERVER_PORT=3000
+# HTTP Server Settings  
+HTTP_SERVER_HOST=0.0.0.0
+HTTP_SERVER_PORT=$HTTP_SERVER_PORT
 
 # Logging
 LOG_LEVEL=INFO
@@ -158,8 +192,31 @@ EOF
     
     chmod 600 "$CONFIG_FILE"
     
-    warn "Please edit $CONFIG_FILE and set your Home Assistant token!"
-    info "You can get a token from: Home Assistant > Profile > Long-lived access tokens"
+    warn "Configuration file created at $CONFIG_FILE"
+    warn "You MUST edit this file and set your Home Assistant token!"
+    info "Get a token from: Home Assistant > Profile > Long-lived access tokens"
+    
+    # Prompt for token if running interactively
+    if [[ -t 0 ]]; then
+        echo
+        read -p "Do you want to enter your Home Assistant token now? (y/n): " -r
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo
+            read -s -p "Enter your Home Assistant long-lived token: " HASS_TOKEN
+            echo
+            if [[ -n "$HASS_TOKEN" ]]; then
+                sed -i "s/HASS_TOKEN=/HASS_TOKEN=$HASS_TOKEN/" "$CONFIG_FILE"
+                log "Token configured ✓"
+            fi
+        fi
+        
+        echo
+        read -p "Enter your Home Assistant URL (default: http://localhost:8123): " -r HASS_URL_INPUT
+        if [[ -n "$HASS_URL_INPUT" ]]; then
+            sed -i "s|HASS_URL=http://localhost:8123|HASS_URL=$HASS_URL_INPUT|" "$CONFIG_FILE"
+            log "Home Assistant URL updated ✓"
+        fi
+    fi
 }
 
 # Create systemd service
@@ -180,7 +237,7 @@ User=$USER
 Group=$USER
 WorkingDirectory=$INSTALL_DIR
 Environment=PATH=$INSTALL_DIR/venv/bin
-ExecStart=$INSTALL_DIR/venv/bin/python -m homeassistant_mcp_server.server
+ExecStart=$INSTALL_DIR/venv/bin/python http_server.py
 EnvironmentFile=$INSTALL_DIR/.env
 Restart=always
 RestartSec=10
@@ -229,10 +286,18 @@ test_installation() {
     source venv/bin/activate
     
     # Test import
-    if python -c "import homeassistant_mcp_server.server" 2>/dev/null; then
-        log "Python module import successful ✓"
+    if python -c "import aiohttp, homeassistant_mcp_server.server" 2>/dev/null; then
+        log "Python modules import successful ✓"
     else
-        error "Python module import failed ✗"
+        error "Python modules import failed ✗"
+        return 1
+    fi
+    
+    # Check if HTTP server file exists
+    if [[ -f "http_server.py" ]]; then
+        log "HTTP server file found ✓"
+    else
+        error "HTTP server file not found ✗"
         return 1
     fi
     
@@ -241,6 +306,10 @@ test_installation() {
         info "You can test the Home Assistant connection with:"
         info "cd $INSTALL_DIR && source venv/bin/activate && python tests/test_connection.py"
     fi
+    
+    # Test HTTP server endpoints
+    info "You can test the HTTP server with:"
+    info "curl http://localhost:$HTTP_SERVER_PORT/health"
 }
 
 # Main installation function
@@ -268,16 +337,22 @@ main() {
     echo -e "${NC}"
     
     info "Next steps:"
-    echo "1. Edit the configuration file: sudo nano $INSTALL_DIR/.env"
-    echo "2. Add your Home Assistant token"
+    echo "1. Edit the configuration file: sudo nano $CONFIG_FILE"
+    echo "2. Add your Home Assistant token (if not already done)"
     echo "3. Start the service: sudo systemctl start $SERVICE_NAME"
     echo "4. Check status: sudo systemctl status $SERVICE_NAME"
     echo "5. View logs: journalctl -u $SERVICE_NAME -f"
     echo ""
-    info "The MCP server will be available on port 3000"
-    info "Access it from other machines using: http://YOUR_PI_IP:3000"
+    info "The HTTP server will be available on port $HTTP_SERVER_PORT"
+    info "Access it from other machines using: http://YOUR_PI_IP:$HTTP_SERVER_PORT"
     echo ""
-    warn "Don't forget to configure your AI client to connect to this server!"
+    info "Available endpoints:"
+    echo "  - Health check: http://YOUR_PI_IP:$HTTP_SERVER_PORT/health"
+    echo "  - Entities: http://YOUR_PI_IP:$HTTP_SERVER_PORT/api/entities"
+    echo "  - Services: http://YOUR_PI_IP:$HTTP_SERVER_PORT/api/services/call"
+    echo "  - History: http://YOUR_PI_IP:$HTTP_SERVER_PORT/api/history"
+    echo ""
+    warn "Don't forget to configure your AI client to connect to this HTTP server!"
 }
 
 # Run main function
