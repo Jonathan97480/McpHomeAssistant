@@ -128,7 +128,7 @@ install_mcp_server() {
     
     cd "$INSTALL_DIR"
     
-    # Try to download files from GitHub
+    # Download project files from GitHub
     log "Downloading project files from GitHub..."
     
     # Create requirements.txt
@@ -144,6 +144,22 @@ EOF
         log "Downloaded http_server.py ✓"
     else
         error "Failed to download http_server.py"
+        exit 1
+    fi
+    
+    # Create and download homeassistant_mcp_server module
+    mkdir -p homeassistant_mcp_server
+    if curl -sSL https://raw.githubusercontent.com/Jonathan97480/McpHomeAssistant/master/src/homeassistant_mcp_server/__init__.py -o homeassistant_mcp_server/__init__.py; then
+        log "Downloaded __init__.py ✓"
+    else
+        error "Failed to download __init__.py"
+        exit 1
+    fi
+    
+    if curl -sSL https://raw.githubusercontent.com/Jonathan97480/McpHomeAssistant/master/src/homeassistant_mcp_server/server.py -o homeassistant_mcp_server/server.py; then
+        log "Downloaded server.py ✓"
+    else
+        error "Failed to download server.py"
         exit 1
     fi
     
@@ -300,6 +316,33 @@ create_log_dir() {
     log "Logging configured ✓"
 }
 
+# Check and clean existing processes
+check_existing_processes() {
+    log "Checking for existing processes on port $HTTP_SERVER_PORT..."
+    
+    # Check if port is in use
+    if netstat -tuln 2>/dev/null | grep -q ":$HTTP_SERVER_PORT "; then
+        warn "Port $HTTP_SERVER_PORT is already in use"
+        info "Cleaning up existing processes..."
+        
+        # Kill any existing http_server.py processes
+        sudo pkill -f 'python.*http_server.py' 2>/dev/null || true
+        
+        # Wait a moment for processes to terminate
+        sleep 2
+        
+        # Check again
+        if netstat -tuln 2>/dev/null | grep -q ":$HTTP_SERVER_PORT "; then
+            warn "Port $HTTP_SERVER_PORT is still in use. You may need to reboot or manually kill processes"
+            info "You can check processes with: sudo lsof -i :$HTTP_SERVER_PORT"
+        else
+            log "Port $HTTP_SERVER_PORT is now available ✓"
+        fi
+    else
+        log "Port $HTTP_SERVER_PORT is available ✓"
+    fi
+}
+
 # Test installation
 test_installation() {
     log "Testing installation..."
@@ -312,6 +355,8 @@ test_installation() {
         log "Python modules import successful ✓"
     else
         error "Python modules import failed ✗"
+        info "This might be due to missing dependencies. Try:"
+        info "cd $INSTALL_DIR && source venv/bin/activate && pip install -r requirements.txt"
         return 1
     fi
     
@@ -320,6 +365,28 @@ test_installation() {
         log "HTTP server file found ✓"
     else
         error "HTTP server file not found ✗"
+        return 1
+    fi
+    
+    # Check if homeassistant_mcp_server module exists
+    if [[ -f "homeassistant_mcp_server/server.py" ]]; then
+        log "MCP server module found ✓"
+    else
+        error "MCP server module not found ✗"
+        return 1
+    fi
+    
+    # Test configuration file
+    if [[ -f ".env" ]]; then
+        log "Configuration file found ✓"
+        if grep -q "HASS_TOKEN=$" .env; then
+            warn "Home Assistant token not configured in .env"
+            info "Remember to edit $INSTALL_DIR/.env and add your token"
+        else
+            log "Home Assistant token configured ✓"
+        fi
+    else
+        error "Configuration file not found ✗"
         return 1
     fi
     
@@ -346,6 +413,7 @@ main() {
     check_system
     install_dependencies
     create_install_dir
+    check_existing_processes
     install_mcp_server
     create_config
     create_systemd_service
@@ -358,6 +426,13 @@ main() {
     echo "============================================================"
     echo -e "${NC}"
     
+    info "Installation Summary:"
+    echo "✅ HTTP Server installed at: $INSTALL_DIR"
+    echo "✅ Service configured: $SERVICE_NAME"
+    echo "✅ Configuration file: $CONFIG_FILE"
+    echo "✅ Server will run on port: $HTTP_SERVER_PORT"
+    echo ""
+    
     info "Next steps:"
     echo "1. Edit the configuration file: sudo nano $CONFIG_FILE"
     echo "2. Add your Home Assistant token (if not already done)"
@@ -365,16 +440,27 @@ main() {
     echo "4. Check status: sudo systemctl status $SERVICE_NAME"
     echo "5. View logs: journalctl -u $SERVICE_NAME -f"
     echo ""
+    
     info "The HTTP server will be available on port $HTTP_SERVER_PORT"
-    info "Access it from other machines using: http://YOUR_PI_IP:$HTTP_SERVER_PORT"
+    echo "🌐 Local access: http://localhost:$HTTP_SERVER_PORT"
+    echo "🌐 Network access: http://$(hostname -I | awk '{print $1}'):$HTTP_SERVER_PORT"
     echo ""
+    
     info "Available endpoints:"
-    echo "  - Health check: http://YOUR_PI_IP:$HTTP_SERVER_PORT/health"
-    echo "  - Entities: http://YOUR_PI_IP:$HTTP_SERVER_PORT/api/entities"
-    echo "  - Services: http://YOUR_PI_IP:$HTTP_SERVER_PORT/api/services/call"
-    echo "  - History: http://YOUR_PI_IP:$HTTP_SERVER_PORT/api/history"
+    echo "  - Health check: /health"
+    echo "  - Entities: /api/entities"
+    echo "  - Services: /api/services/call"
+    echo "  - History: /api/history"
     echo ""
-    warn "Don't forget to configure your AI client to connect to this HTTP server!"
+    
+    info "Troubleshooting:"
+    echo "  - Check installation: curl http://localhost:$HTTP_SERVER_PORT/health"
+    echo "  - View logs: journalctl -u $SERVICE_NAME -f"
+    echo "  - Manual start: cd $INSTALL_DIR && source venv/bin/activate && python http_server.py"
+    echo ""
+    
+    warn "🔒 Security reminder: Your Home Assistant token is stored in $CONFIG_FILE"
+    warn "Make sure this file has proper permissions (600) and is not accessible to unauthorized users!"
 }
 
 # Run main function
