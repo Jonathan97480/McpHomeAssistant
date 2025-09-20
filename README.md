@@ -301,6 +301,34 @@ Configure in Cline settings:
 }
 ```
 
+### LM Studio
+LM Studio peut utiliser le serveur via des fonctions HTTP personnalisées:
+
+**Option 1: HTTP Functions (Recommandé)**
+1. Importez le fichier [`configs/lm-studio-functions.json`](configs/lm-studio-functions.json)
+2. Utilisez le prompt système [`configs/lm-studio-system-prompt.md`](configs/lm-studio-system-prompt.md)
+3. Assurez-vous que le serveur HTTP fonctionne: `http://192.168.1.22:3002/health`
+
+**Configuration rapide:**
+```json
+{
+  "name": "control_light",
+  "endpoint": {
+    "method": "POST",
+    "url": "http://192.168.1.22:3002/api/services/call",
+    "body": {
+      "domain": "light",
+      "service": "{{action}}",
+      "service_data": {"entity_id": "{{entity_id}}"}
+    }
+  }
+}
+```
+
+📖 **[Guide complet LM Studio](docs/LM_STUDIO_CONFIG.md)**
+}
+```
+
 ### OpenWebUI
 For OpenWebUI MCP integration:
 

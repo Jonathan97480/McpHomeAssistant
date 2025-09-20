@@ -1,0 +1,267 @@
+{
+  "functions": [
+    {
+      "name": "get_homeassistant_entities",
+      "description": "Récupère la liste de toutes les entités Home Assistant disponibles avec possibilité de filtrage par domaine",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string", 
+            "description": "Filtrer par domaine spécifique (light, switch, sensor, climate, etc.)",
+            "enum": ["light", "switch", "sensor", "climate", "binary_sensor", "camera", "cover", "fan", "lock", "media_player", "vacuum", "alarm_control_panel"]
+          }
+        }
+      },
+      "endpoint": {
+        "method": "GET",
+        "url": "http://192.168.1.22:3002/api/entities",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      }
+    },
+    {
+      "name": "get_entity_state", 
+      "description": "Récupère l'état détaillé d'une entité Home Assistant spécifique",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "L'ID complet de l'entité (ex: light.salon, switch.prise_1)",
+            "required": true
+          }
+        },
+        "required": ["entity_id"]
+      },
+      "endpoint": {
+        "method": "GET", 
+        "url": "http://192.168.1.22:3002/api/entities/{entity_id}",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      }
+    },
+    {
+      "name": "control_light",
+      "description": "Contrôle une lumière (allumer, éteindre, ajuster luminosité et couleur)",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "L'ID de la lumière (ex: light.salon)",
+            "required": true
+          },
+          "action": {
+            "type": "string",
+            "description": "Action à effectuer",
+            "enum": ["turn_on", "turn_off", "toggle"],
+            "required": true
+          },
+          "brightness": {
+            "type": "number",
+            "description": "Luminosité de 0 à 255 (seulement pour turn_on)",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "rgb_color": {
+            "type": "array",
+            "description": "Couleur RGB [rouge, vert, bleu] de 0 à 255",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        },
+        "required": ["entity_id", "action"]
+      },
+      "endpoint": {
+        "method": "POST",
+        "url": "http://192.168.1.22:3002/api/services/call",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "domain": "light",
+          "service": "{{action}}",
+          "service_data": {
+            "entity_id": "{{entity_id}}",
+            "brightness": "{{brightness}}",
+            "rgb_color": "{{rgb_color}}"
+          }
+        }
+      }
+    },
+    {
+      "name": "control_switch",
+      "description": "Contrôle un interrupteur ou une prise (allumer, éteindre)",
+      "parameters": {
+        "type": "object", 
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "L'ID de l'interrupteur (ex: switch.prise_salon)",
+            "required": true
+          },
+          "action": {
+            "type": "string",
+            "description": "Action à effectuer",
+            "enum": ["turn_on", "turn_off", "toggle"],
+            "required": true
+          }
+        },
+        "required": ["entity_id", "action"]
+      },
+      "endpoint": {
+        "method": "POST",
+        "url": "http://192.168.1.22:3002/api/services/call", 
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "domain": "switch",
+          "service": "{{action}}",
+          "service_data": {
+            "entity_id": "{{entity_id}}"
+          }
+        }
+      }
+    },
+    {
+      "name": "control_climate",
+      "description": "Contrôle le système de chauffage/climatisation",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string", 
+            "description": "L'ID du thermostat (ex: climate.salon)",
+            "required": true
+          },
+          "temperature": {
+            "type": "number",
+            "description": "Température cible en degrés Celsius"
+          },
+          "hvac_mode": {
+            "type": "string",
+            "description": "Mode de fonctionnement",
+            "enum": ["off", "heat", "cool", "auto", "dry", "fan_only"]
+          }
+        },
+        "required": ["entity_id"]
+      },
+      "endpoint": {
+        "method": "POST",
+        "url": "http://192.168.1.22:3002/api/services/call",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "domain": "climate", 
+          "service": "set_temperature",
+          "service_data": {
+            "entity_id": "{{entity_id}}",
+            "temperature": "{{temperature}}",
+            "hvac_mode": "{{hvac_mode}}"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_entity_history",
+      "description": "Récupère l'historique d'une entité sur une période donnée",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "L'ID de l'entité",
+            "required": true
+          },
+          "hours": {
+            "type": "number",
+            "description": "Nombre d'heures d'historique à récupérer",
+            "default": 24,
+            "minimum": 1,
+            "maximum": 168
+          }
+        },
+        "required": ["entity_id"]
+      },
+      "endpoint": {
+        "method": "GET",
+        "url": "http://192.168.1.22:3002/api/history?entity_id={{entity_id}}&hours={{hours}}",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      }
+    },
+    {
+      "name": "call_custom_service",
+      "description": "Appel d'un service Home Assistant personnalisé avec des paramètres flexibles",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string",
+            "description": "Le domaine du service (ex: automation, script, notify)",
+            "required": true
+          },
+          "service": {
+            "type": "string", 
+            "description": "Le nom du service (ex: trigger, turn_on, send_message)",
+            "required": true
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "L'ID de l'entité cible (optionnel)"
+          },
+          "service_data": {
+            "type": "object",
+            "description": "Données supplémentaires pour le service",
+            "additionalProperties": true
+          }
+        },
+        "required": ["domain", "service"]
+      },
+      "endpoint": {
+        "method": "POST",
+        "url": "http://192.168.1.22:3002/api/services/call",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "domain": "{{domain}}",
+          "service": "{{service}}",
+          "service_data": "{{service_data}}"
+        }
+      }
+    },
+    {
+      "name": "check_server_health",
+      "description": "Vérifie l'état de santé du serveur Home Assistant et la connectivité",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "endpoint": {
+        "method": "GET",
+        "url": "http://192.168.1.22:3002/health",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      }
+    }
+  ],
+  "configuration": {
+    "server_url": "http://192.168.1.22:3002",
+    "description": "Serveur MCP Home Assistant pour contrôle domotique via IA",
+    "version": "1.0.0",
+    "documentation": "docs/LM_STUDIO_CONFIG.md"
+  }
+}
