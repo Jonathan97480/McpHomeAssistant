@@ -23,7 +23,7 @@ NC='\033[0m' # No Color
 # Configuration
 INSTALL_DIR="/opt/homeassistant-mcp-server"
 SERVICE_NAME="homeassistant-mcp-server"
-USER="homeassistant"
+USER=$(whoami)
 PYTHON_VERSION="3.11"
 HTTP_SERVER_PORT=3002
 
@@ -48,9 +48,11 @@ info() {
 check_root() {
     if [[ $EUID -eq 0 ]]; then
         error "This script should not be run as root for security reasons."
-        error "Please run it as the homeassistant user or with sudo for specific commands."
+        error "Please run it as a regular user. sudo will be used when needed."
         exit 1
     fi
+    
+    log "Running as user: $USER"
 }
 
 # Check system requirements
@@ -124,25 +126,45 @@ create_install_dir() {
 install_mcp_server() {
     log "Installing Home Assistant MCP Server..."
     
-    # Clone repository or copy files
-    if [[ ! -d "$INSTALL_DIR" ]]; then
-        sudo mkdir -p "$INSTALL_DIR"
-        sudo chown $USER:$USER "$INSTALL_DIR"
-    fi
-    
     cd "$INSTALL_DIR"
     
-    # Copy files (assuming they're in current directory when script is run)
-    if [[ -f "../http_server.py" ]]; then
-        cp ../http_server.py .
-        cp ../requirements.txt .
-        cp -r ../homeassistant_mcp_server .
-        cp -r ../scripts .
-        cp -r ../tests . 2>/dev/null || true
-        cp -r ../docs . 2>/dev/null || true
+    # Try to download files from GitHub
+    log "Downloading project files from GitHub..."
+    
+    # Create requirements.txt
+    cat > requirements.txt << 'EOF'
+aiohttp>=3.8.0
+python-dotenv>=0.19.0
+aiofiles>=23.0.0
+mcp>=1.0.0
+EOF
+    
+    # Download essential files
+    if curl -sSL https://raw.githubusercontent.com/Jonathan97480/McpHomeAssistant/master/http_server.py -o http_server.py; then
+        log "Downloaded http_server.py ✓"
     else
-        error "HTTP server files not found. Please run this script from the project directory."
+        error "Failed to download http_server.py"
         exit 1
+    fi
+    
+    # Create scripts directory and download launcher
+    mkdir -p scripts
+    if curl -sSL https://raw.githubusercontent.com/Jonathan97480/McpHomeAssistant/master/scripts/launcher.py -o scripts/launcher.py; then
+        log "Downloaded launcher.py ✓"
+    else
+        warn "Failed to download launcher.py, creating basic version"
+        cat > scripts/launcher.py << 'EOF'
+#!/usr/bin/env python3
+import os
+import sys
+import subprocess
+
+# Add the installation directory to Python path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+if __name__ == "__main__":
+    subprocess.run([sys.executable, "http_server.py"])
+EOF
     fi
     
     # Create virtual environment
