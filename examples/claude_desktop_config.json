@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "homeassistant": {
+            "command": "homeassistant-mcp-server",
+            "env": {
+                "HASS_URL": "http://192.168.1.22:8123",
+                "HASS_TOKEN": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIwOTJjYjIyOTg0YWM0MWY3ODQyZTFjNmEwYzc0OTI2MSIsImlhdCI6MTc1ODM5MzY5MSwiZXhwIjoyMDczNzUzNjkxfQ.CmRkACMTOyMW8dkw6dCCm40nLNSPW66bDNqXWlAsqVU"
+            }
+        }
+    }
+}
