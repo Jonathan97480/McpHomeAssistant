@@ -24,7 +24,7 @@ NC='\033[0m' # No Color
 INSTALL_DIR="/opt/homeassistant-mcp-server"
 SERVICE_NAME="homeassistant-mcp-server"
 USER=$(whoami)
-PYTHON_VERSION="3.11"
+PYTHON_VERSION="python3"
 HTTP_SERVER_PORT=3002
 
 # Logging function
