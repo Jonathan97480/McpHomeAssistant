@@ -42,6 +42,20 @@ homeassistant-mcp-server/
 
 ## 🚀 Installation
 
+### Quick Start Options
+
+#### 🍓 **Raspberry Pi Installation (Recommended)**
+Install directly on your Raspberry Pi alongside Home Assistant:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Jonathan97480/McpHomeAssistant/master/install.sh | bash
+```
+
+📖 **[Complete Raspberry Pi Guide](docs/RASPBERRY_PI_INSTALL.md)**
+
+#### 💻 **Desktop Installation**
+For development or remote installation:
+
 ### Prerequisites
 
 - Python 3.8+
@@ -372,6 +386,20 @@ homeassistant-mcp-server/
 ```
 
 ## 🚀 Installation
+
+### Options de Démarrage Rapide
+
+#### 🍓 **Installation Raspberry Pi (Recommandée)**
+Installez directement sur votre Raspberry Pi avec Home Assistant :
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Jonathan97480/McpHomeAssistant/master/install.sh | bash
+```
+
+📖 **[Guide Complet Raspberry Pi](docs/RASPBERRY_PI_INSTALL.md)**
+
+#### 💻 **Installation Bureau**
+Pour le développement ou l'installation à distance :
 
 ### Prérequis
 
