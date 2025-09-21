@@ -57,5 +57,8 @@ fix_*.py
 start_dev_*.py
 run_*.py
 
+# Development documentation (local only)
+docs/DEVELOPMENT_RULES.md
+
 # Claude Desktop
 claude_desktop_config_local.json

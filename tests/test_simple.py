@@ -12,17 +12,37 @@ import threading
 import os
 
 def start_server_in_background():
-    """Lance le serveur en arrière-plan"""
+    """Lance le serveur en arrière-plan avec gestion améliorée"""
     try:
         print('🚀 Démarrage du serveur en arrière-plan...')
+        
+        # Changer vers le répertoire parent
+        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
         # Lancer le serveur en arrière-plan
         proc = subprocess.Popen([
-            sys.executable, 'bridge_server.py'
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=os.getcwd())
+            sys.executable, 'start_server.py'
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+           cwd=parent_dir,
+           creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0)
         
-        # Attendre que le serveur démarre
-        time.sleep(8)
-        return proc
+        # Attendre que le serveur démarre avec vérification
+        max_wait = 15
+        for i in range(max_wait):
+            try:
+                response = requests.get('http://localhost:8080/health', timeout=2)
+                if response.status_code == 200:
+                    print(f'✅ Serveur démarré avec succès (en {i+1}s)')
+                    return proc
+            except:
+                pass
+            time.sleep(1)
+            print(f'   Attente du serveur... ({i+1}/{max_wait})')
+        
+        print('❌ Timeout: Le serveur n\'a pas démarré')
+        proc.terminate()
+        return None
+        
     except Exception as e:
         print(f'❌ Erreur démarrage serveur: {e}')
         return None

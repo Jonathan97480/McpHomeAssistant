@@ -1145,11 +1145,10 @@ async def login_user(login_data: UserLogin, request: Request):
         
         if not user:
             # Log tentative échouée
-            await db_manager.log_error(
+            await log_error(
                 error_type="AUTH_FAILED",
                 error_message=f"Failed login for {login_data.username}",
-                endpoint="/auth/login",
-                user_id=None
+                context={"endpoint": "/auth/login", "user_id": None}
             )
             
             raise HTTPException(
@@ -1162,13 +1161,7 @@ async def login_user(login_data: UserLogin, request: Request):
         token_response = await auth_manager.create_user_session(user, user_agent, ip_address)
         
         # Log connexion réussie
-        await db_manager.log_request(
-            endpoint="/auth/login",
-            method="POST",
-            user_id=user.id,
-            ip_address=ip_address,
-            status_code=200
-        )
+        logger.info(f"📊 Login successful: {user.username} from {ip_address}")
         
         logger.info(f"✅ User logged in successfully: {user.username}")
         return token_response
