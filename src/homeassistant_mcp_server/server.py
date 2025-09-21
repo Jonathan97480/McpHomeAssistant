@@ -390,7 +390,8 @@ async def handle_call_tool(name: str, arguments: dict) -> List[types.TextContent
                 entities = await client.get_entities()
                 domain_filter = arguments.get("domain")
                 
-                if domain_filter:
+                # Filtrer par domaine seulement si un domaine spécifique est demandé (pas "all" ou vide)
+                if domain_filter and domain_filter.lower() not in ["all", "", "tous"]:
                     entities = [e for e in entities if e["entity_id"].startswith(f"{domain_filter}.")]
                 
                 result = {
