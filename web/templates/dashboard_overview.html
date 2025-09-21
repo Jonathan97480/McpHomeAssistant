@@ -101,22 +101,44 @@ class DashboardOverview {
     }
     
     init() {
-        this.loadMetrics();
-        this.loadRecentConnections();
-        this.loadAvailableTools();
-        this.setupEventListeners();
+        // Attendre que les éléments DOM soient disponibles
+        const checkElements = () => {
+            const requiredElements = [
+                'active-connections', 'total-tools', 'requests-per-hour', 
+                'uptime', 'connections-list', 'tools-grid'
+            ];
+            
+            const allElementsExist = requiredElements.every(id => 
+                document.getElementById(id) !== null
+            );
+            
+            if (allElementsExist) {
+                this.loadMetrics();
+                this.loadRecentConnections();
+                this.loadAvailableTools();
+                this.setupEventListeners();
+                
+                // Actualiser les métriques toutes les 30 secondes
+                setInterval(() => {
+                    this.loadMetrics();
+                    this.loadRecentConnections();
+                }, 30000);
+            } else {
+                // Réessayer dans 100ms si les éléments ne sont pas encore disponibles
+                setTimeout(checkElements, 100);
+            }
+        };
         
-        // Actualiser les métriques toutes les 30 secondes
-        setInterval(() => {
-            this.loadMetrics();
-            this.loadRecentConnections();
-        }, 30000);
+        checkElements();
     }
     
     setupEventListeners() {
-        document.getElementById('refresh-tools').addEventListener('click', () => {
-            this.loadAvailableTools();
-        });
+        const refreshButton = document.getElementById('refresh-tools');
+        if (refreshButton) {
+            refreshButton.addEventListener('click', () => {
+                this.loadAvailableTools();
+            });
+        }
     }
     
     async loadMetrics() {
@@ -124,10 +146,16 @@ class DashboardOverview {
             const response = await fetch('/api/metrics');
             const metrics = await response.json();
             
-            document.getElementById('active-connections').textContent = metrics.active_connections || 0;
-            document.getElementById('total-tools').textContent = metrics.total_tools || 0;
-            document.getElementById('requests-per-hour').textContent = metrics.requests_per_hour || 0;
-            document.getElementById('uptime').textContent = this.formatUptime(metrics.uptime || 0);
+            // Vérifier que les éléments existent avant de les modifier
+            const activeConnections = document.getElementById('active-connections');
+            const totalTools = document.getElementById('total-tools');
+            const requestsPerHour = document.getElementById('requests-per-hour');
+            const uptime = document.getElementById('uptime');
+            
+            if (activeConnections) activeConnections.textContent = metrics.active_connections || 0;
+            if (totalTools) totalTools.textContent = metrics.total_tools || 0;
+            if (requestsPerHour) requestsPerHour.textContent = metrics.requests_per_hour || 0;
+            if (uptime) uptime.textContent = this.formatUptime(metrics.uptime || 0);
             
             this.updateActivityChart(metrics.activity_data);
         } catch (error) {
@@ -141,6 +169,10 @@ class DashboardOverview {
             const connections = await response.json();
             
             const container = document.getElementById('connections-list');
+            if (!container) {
+                console.log('Élément connections-list non trouvé dans le DOM, probablement sur une autre page');
+                return;
+            }
             container.innerHTML = '';
             
             if (connections.length === 0) {
@@ -176,6 +208,10 @@ class DashboardOverview {
             const tools = await response.json();
             
             const container = document.getElementById('tools-grid');
+            if (!container) {
+                console.log('Élément tools-grid non trouvé dans le DOM, probablement sur une autre page');
+                return;
+            }
             container.innerHTML = '';
             
             if (tools.length === 0) {
@@ -212,6 +248,8 @@ class DashboardOverview {
         // Ici, on pourrait utiliser Chart.js ou une autre bibliothèque
         // Pour l'instant, on crée un graphique simple
         const canvas = document.getElementById('activity-chart');
+        if (!canvas) return; // Vérifier que l'élément existe
+        
         const ctx = canvas.getContext('2d');
         
         // Nettoyer le canvas
@@ -274,9 +312,22 @@ class DashboardOverview {
 }
 
 // Initialiser le dashboard overview quand la page est chargée
+// Attendre un délai supplémentaire pour s'assurer que le DOM est complètement rendu
+const initDashboardOverview = () => {
+    // Vérifier si les éléments existent avant d'initialiser
+    if (document.getElementById('active-connections')) {
+        new DashboardOverview();
+    } else {
+        // Réessayer après un court délai
+        setTimeout(initDashboardOverview, 200);
+    }
+};
+
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => new DashboardOverview());
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(initDashboardOverview, 100);
+    });
 } else {
-    new DashboardOverview();
+    setTimeout(initDashboardOverview, 100);
 }
 </script>

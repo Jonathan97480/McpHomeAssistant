@@ -174,7 +174,10 @@ class ToolsManager {
     async loadTools() {
         try {
             const response = await fetch('/api/tools');
-            this.tools = await response.json();
+            const data = await response.json();
+            
+            // S'assurer que les données sont un tableau
+            this.tools = Array.isArray(data) ? data : [];
             this.filteredTools = [...this.tools];
             
             this.updateStatistics();
@@ -182,6 +185,9 @@ class ToolsManager {
             
         } catch (error) {
             console.error('Erreur chargement outils:', error);
+            // Initialiser avec un tableau vide en cas d'erreur
+            this.tools = [];
+            this.filteredTools = [];
             window.showToast('Erreur lors du chargement des outils', 'error');
         }
     }

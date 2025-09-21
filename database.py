@@ -521,6 +521,105 @@ class DatabaseManager:
             logging.error(f"Erreur comptage requêtes entre {start_time} et {end_time}: {e}")
             return 0
 
+    
+    # ====== Méthodes de gestion de configuration ======
+    
+    async def save_user_ha_config(self, username: str, url: str, token: str, config_name: str = "default"):
+        """Sauvegarde la configuration Home Assistant pour un utilisateur"""
+        try:
+            # Simple chiffrement du token (base64 pour l'instant)
+            import base64
+            token_encrypted = base64.b64encode(token.encode()).decode()
+            
+            # Insérer ou mettre à jour la configuration
+            query = """
+                INSERT OR REPLACE INTO ha_configs 
+                (user_id, name, url, token_encrypted, is_active, updated_at)
+                VALUES (
+                    (SELECT 1), -- User ID fixe pour l'instant
+                    ?, ?, ?, 1, CURRENT_TIMESTAMP
+                )
+            """
+            
+            self.connection.execute(query, (config_name, url, token_encrypted))
+            self.connection.commit()
+            logging.info(f"✅ Configuration Home Assistant sauvegardée pour {username}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Erreur sauvegarde config HA: {e}")
+            return False
+    
+    async def get_user_ha_config(self, username: str = "beroute"):
+        """Récupère la configuration Home Assistant active pour un utilisateur"""
+        try:
+            query = """
+                SELECT url, token_encrypted, name, last_test, last_status 
+                FROM ha_configs 
+                WHERE is_active = 1 
+                ORDER BY updated_at DESC 
+                LIMIT 1
+            """
+            
+            cursor = self.connection.execute(query)
+            result = cursor.fetchone()
+            if result:
+                # Déchiffrer le token (result est un tuple, pas un dict)
+                import base64
+                try:
+                    token_decrypted = base64.b64decode(result[1]).decode()  # index 1 = token_encrypted
+                except:
+                    token_decrypted = "token_invalid"
+                
+                return {
+                    "hass_url": result[0],  # index 0 = url
+                    "hass_token": token_decrypted,
+                    "config_name": result[2],  # index 2 = name
+                    "last_test": result[3],  # index 3 = last_test
+                    "last_status": result[4],  # index 4 = last_status
+                    "source": "database"
+                }
+            else:
+                logging.info("ℹ️ Aucune configuration HA en base, utilisation des variables d'environnement")
+                return None
+                
+        except Exception as e:
+            logging.error(f"❌ Erreur récupération config HA: {e}")
+            return None
+    
+    async def save_system_config(self, config_type: str, config_data: dict):
+        """Sauvegarde une configuration système générale"""
+        try:
+            import json
+            query = """
+                INSERT OR REPLACE INTO system_config 
+                (config_type, config_data, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+            """
+            
+            await self.execute_async(query, (config_type, json.dumps(config_data)))
+            logging.info(f"✅ Configuration système '{config_type}' sauvegardée")
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Erreur sauvegarde config système: {e}")
+            return False
+    
+    async def get_system_config(self, config_type: str):
+        """Récupère une configuration système"""
+        try:
+            query = "SELECT config_data FROM system_config WHERE config_type = ?"
+            result = await self.fetch_one_async(query, (config_type,))
+            
+            if result:
+                import json
+                return json.loads(result['config_data'])
+            return None
+            
+        except Exception as e:
+            logging.error(f"❌ Erreur récupération config système: {e}")
+            return None
+
     async def close(self):
         """Ferme la connexion à la base de données"""
         if self.connection:

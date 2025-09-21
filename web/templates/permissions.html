@@ -55,10 +55,10 @@
                 <table class="table">
                     <thead>
                         <tr>
-                            <th>Utilisateur</th>
-                            <th>Resource</th>
-                            <th>Permissions</th>
-                            <th>Accordé le</th>
+                            <th>Permission</th>
+                            <th>Catégorie</th>
+                            <th>Statut</th>
+                            <th>ID</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -199,7 +199,10 @@ class PermissionsManager {
     async loadUsers() {
         try {
             const response = await fetch('/api/users');
-            this.users = await response.json();
+            const data = await response.json();
+            
+            // Extraire le tableau users de la réponse
+            this.users = data.users || [];
             
             const userSelects = [
                 document.getElementById('filter-user'),
@@ -221,16 +224,21 @@ class PermissionsManager {
             });
         } catch (error) {
             console.error('Erreur lors du chargement des utilisateurs:', error);
+            this.users = [];
         }
     }
     
     async loadPermissions() {
         try {
             const response = await fetch('/api/permissions');
-            this.permissions = await response.json();
+            const data = await response.json();
+            
+            // Extraire le tableau permissions de la réponse
+            this.permissions = data.permissions || [];
             this.renderPermissions();
         } catch (error) {
             console.error('Erreur lors du chargement des permissions:', error);
+            this.permissions = [];
         }
     }
     
@@ -258,25 +266,25 @@ class PermissionsManager {
             row.innerHTML = `
                 <td>
                     <div class="flex items-center gap-2">
-                        <div class="user-avatar-sm">${permission.user_full_name?.charAt(0) || permission.username.charAt(0)}</div>
+                        <div class="permission-icon">🔑</div>
                         <div>
-                            <div class="font-medium">${permission.user_full_name || permission.username}</div>
-                            <div class="text-sm text-secondary">${permission.username}</div>
+                            <div class="font-medium">${permission.name}</div>
+                            <div class="text-sm text-secondary">${permission.description}</div>
                         </div>
                     </div>
                 </td>
                 <td>
-                    <code class="code-inline">${permission.resource}</code>
+                    <span class="badge badge-${permission.category === 'homeassistant' ? 'primary' : permission.category === 'system' ? 'warning' : 'secondary'}">${permission.category}</span>
                 </td>
                 <td>
                     <div class="flex gap-1">
-                        ${permission.permissions.map(perm => `
-                            <span class="badge badge-${this.getPermissionColor(perm)}">${perm}</span>
-                        `).join('')}
+                        <span class="badge badge-${permission.enabled ? 'success' : 'secondary'}">
+                            ${permission.enabled ? 'Activée' : 'Désactivée'}
+                        </span>
                     </div>
                 </td>
                 <td class="text-sm text-secondary">
-                    ${this.formatDate(permission.granted_at)}
+                    ID: ${permission.id}
                 </td>
                 <td>
                     <div class="flex gap-2">

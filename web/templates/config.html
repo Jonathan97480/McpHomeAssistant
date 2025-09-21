@@ -391,6 +391,12 @@ class ConfigManager {
         const statusDot = document.getElementById('ha-status');
         const statusText = document.getElementById('ha-status-text');
         
+        // Vérifier que les éléments existent avant de les modifier
+        if (!statusDot || !statusText) {
+            console.log('Éléments de statut HA non trouvés, probablement sur une autre page');
+            return;
+        }
+        
         if (connected) {
             statusDot.className = 'status-dot status-online';
             statusText.textContent = message || 'Connecté';

@@ -93,8 +93,18 @@ class MCPDashboard {
             };
 
             this.socket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                this.handleWebSocketMessage(data);
+                try {
+                    const data = JSON.parse(event.data);
+                    this.handleWebSocketMessage(data);
+                } catch (error) {
+                    console.warn('Message WebSocket non-JSON reçu:', event.data);
+                    // Traiter comme message texte simple
+                    this.handleWebSocketMessage({
+                        type: 'text',
+                        message: event.data,
+                        timestamp: Date.now()
+                    });
+                }
             };
 
             this.socket.onclose = () => {
@@ -329,20 +339,62 @@ class MCPDashboard {
     executeScripts(container) {
         const scripts = container.querySelectorAll('script');
         scripts.forEach(script => {
-            const newScript = document.createElement('script');
-            if (script.src) {
-                newScript.src = script.src;
-            } else {
-                newScript.textContent = script.textContent;
+            // Créer un identifiant unique pour ce script basé sur son contenu
+            const scriptContent = script.textContent || script.src || '';
+            const scriptId = this.generateScriptId(scriptContent);
+
+            // Vérifier si ce script a déjà été exécuté
+            if (!this.executedScripts) {
+                this.executedScripts = new Set();
             }
-            document.head.appendChild(newScript);
-            // Laisser le script s'exécuter, puis le supprimer après un délai
-            setTimeout(() => {
-                if (newScript.parentNode) {
-                    newScript.parentNode.removeChild(newScript);
+
+            // Pages qui doivent réexécuter leurs scripts pour recharger les données
+            const currentPath = window.location.pathname;
+            const reloadablePages = ['/tools', '/permissions', '/overview'];
+            const shouldReexecute = reloadablePages.some(path => currentPath.includes(path));
+
+            if (!shouldReexecute && this.executedScripts.has(scriptId)) {
+                console.log(`Script déjà exécuté, ignore`);
+                return;
+            }
+
+            try {
+                if (script.src) {
+                    // Script externe - vérifier s'il n'est pas déjà chargé
+                    const existingScript = document.querySelector(`script[src="${script.src}"]`);
+                    if (existingScript) {
+                        console.log(`Script externe ${script.src} déjà chargé`);
+                        return;
+                    }
+                    const newScript = document.createElement('script');
+                    newScript.src = script.src;
+                    document.head.appendChild(newScript);
+                } else if (script.textContent) {
+                    // Script inline - l'exécuter dans un scope isolé
+                    try {
+                        // Utiliser une fonction pour créer un scope local
+                        const func = new Function(script.textContent);
+                        func();
+                    } catch (evalError) {
+                        // Si l'exécution directe échoue, essayer avec eval
+                        console.log('Tentative avec eval...', evalError.message);
+                        eval(script.textContent);
+                    }
                 }
-            }, 100);
+
+                // Marquer ce script comme exécuté
+                this.executedScripts.add(scriptId);
+
+            } catch (error) {
+                console.error('Erreur lors de l\'exécution du script:', error);
+                // Ne pas bloquer l'exécution des autres scripts
+            }
         });
+    }
+
+    generateScriptId(content) {
+        // Générer un identifiant simple basé sur le contenu
+        return btoa(content.substring(0, 100)).replace(/[^a-zA-Z0-9]/g, '');
     }
 
     async loadCurrentPage() {
@@ -369,7 +421,11 @@ class MCPDashboard {
         const content = document.getElementById('main-content');
         if (!content) return;
 
-        const permissions = await this.apiCall('/permissions/me');
+        // Utiliser le bon endpoint API
+        const response = await fetch('/api/permissions');
+        const data = await response.json();
+        const permissions = data.permissions || [];
+
         content.innerHTML = this.renderPermissions(permissions);
         this.currentPage = 'permissions';
 
