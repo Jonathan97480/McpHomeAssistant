@@ -1,0 +1,38 @@
+# 📦 Requirements for HTTP-MCP Bridge
+# FastAPI server with async queue management
+
+# Core FastAPI stack
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# HTTP client for external requests
+httpx==0.25.2
+requests==2.31.0
+
+# Database (SQLite is built into Python)
+# No additional dependencies needed for SQLite3
+
+# Async support
+asyncio-mqtt==0.16.1
+
+# Environment management
+python-dotenv==1.0.0
+
+# Logging and monitoring
+structlog==23.2.0
+
+# Date/time utilities
+python-dateutil==2.8.2
+
+# Home Assistant API
+homeassistant==2023.11.0  # For type hints if needed
+
+# MCP Protocol (existing)
+mcp==1.0.0
+
+# Development tools
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+isort==5.12.0
