@@ -31,6 +31,9 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # Import du système de base de données
 from database import db_manager, log_manager, setup_database, cleanup_old_data_task, LogEntry, RequestEntry, ErrorEntry
 
+# Import du système de cache et circuit breaker
+from cache_manager import cache_manager, CircuitBreakerOpenError
+
 # Variables globales pour le serveur MCP
 mcp_server = None
 ha_client = None
@@ -70,10 +73,56 @@ async def initialize_mcp_server():
 
 
 class MockMCPServer:
-    """Serveur MCP de test pour le développement"""
+    """Serveur MCP de test pour le développement avec cache et circuit breaker"""
     
     async def list_tools(self):
-        """Retourne une liste d'outils simulés"""
+        """Retourne une liste d'outils simulés avec mise en cache"""
+        # Clé de cache pour les outils
+        cache_key = "mock_tools_list"
+        
+        # Vérifier le cache d'abord
+        cached_tools = await cache_manager.get_tools_cached(cache_key)
+        if cached_tools is not None:
+            logging.debug("🚀 Cache HIT: tools list retrieved from cache")
+            return cached_tools
+        
+        # Simuler une récupération d'outils (avec circuit breaker)
+        try:
+            tools_data = await cache_manager.protected_call(self._fetch_tools_from_ha)
+            
+            # Mettre en cache pour 10 minutes
+            await cache_manager.set_tools_cached(cache_key, tools_data, ttl=600.0)
+            logging.debug("💾 Tools list cached for 10 minutes")
+            
+            return tools_data
+            
+        except CircuitBreakerOpenError:
+            logging.warning("⚠️ Circuit breaker OPEN - returning cached fallback tools")
+            # Retourner une version minimale en cas d'erreur
+            fallback_tools = {
+                "tools": [
+                    {
+                        "name": "health_check",
+                        "description": "Vérification de santé (mode dégradé)",
+                        "inputSchema": {"type": "object", "properties": {}}
+                    }
+                ]
+            }
+            return fallback_tools
+        except Exception as e:
+            logging.error(f"❌ Error fetching tools: {e}")
+            raise
+    
+    async def _fetch_tools_from_ha(self):
+        """Simule la récupération des outils depuis Home Assistant"""
+        # Simuler une latence réseau
+        await asyncio.sleep(0.1)
+        
+        # Simuler parfois une erreur pour tester le circuit breaker
+        import random
+        if random.random() < 0.05:  # 5% de chance d'erreur
+            raise Exception("Simulated Home Assistant connection error")
+        
         return {
             "tools": [
                 {
@@ -102,18 +151,84 @@ class MockMCPServer:
                         },
                         "required": ["domain", "service"]
                     }
+                },
+                {
+                    "name": "get_state",
+                    "description": "Récupère l'état d'une entité",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "entity_id": {"type": "string"}
+                        },
+                        "required": ["entity_id"]
+                    }
                 }
             ]
         }
     
     async def call_tool(self, name: str, args: Dict[str, Any]):
-        """Exécute un outil simulé"""
+        """Exécute un outil simulé avec cache et circuit breaker"""
+        # Clé de cache pour les réponses (inclut le nom et les args)
+        import hashlib
+        args_str = json.dumps(args, sort_keys=True)
+        cache_key = f"tool_response_{name}_{hashlib.md5(args_str.encode()).hexdigest()}"
+        
+        # Vérifier le cache pour les réponses en lecture seule
+        if name in ["get_entities", "get_state"]:
+            cached_response = await cache_manager.get_response_cached(cache_key)
+            if cached_response is not None:
+                logging.debug(f"🚀 Cache HIT: response for {name} retrieved from cache")
+                return cached_response
+        
+        try:
+            # Exécuter avec protection circuit breaker
+            response = await cache_manager.protected_call(self._execute_tool, name, args)
+            
+            # Mettre en cache les réponses en lecture (TTL plus court)
+            if name in ["get_entities", "get_state"]:
+                await cache_manager.set_response_cached(cache_key, response, ttl=60.0)
+                logging.debug(f"💾 Response for {name} cached for 1 minute")
+            
+            return response
+            
+        except CircuitBreakerOpenError:
+            logging.warning(f"⚠️ Circuit breaker OPEN - returning fallback for {name}")
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": f"⚠️ Service temporairement indisponible - {name} en mode dégradé"
+                }],
+                "isError": False
+            }
+        except Exception as e:
+            logging.error(f"❌ Error executing tool {name}: {e}")
+            raise
+    
+    async def _execute_tool(self, name: str, args: Dict[str, Any]):
+        """Exécute l'outil (logique métier)"""
+        # Simuler une latence réseau
+        await asyncio.sleep(0.05)
+        
+        # Simuler parfois une erreur pour tester le circuit breaker
+        import random
+        if random.random() < 0.03:  # 3% de chance d'erreur
+            raise Exception(f"Simulated error executing {name}")
+        
         if name == "get_entities":
             domain = args.get("domain", "all")
             return {
                 "content": [{
                     "type": "text", 
-                    "text": f"🔧 Mock: Récupération des entités pour le domaine '{domain}'\n\nEntités simulées:\n- light.salon_lamp (état: off)\n- sensor.temperature (état: 22.5°C)\n- switch.tv (état: on)"
+                    "text": f"🔧 Mock: Récupération des entités pour le domaine '{domain}'\n\nEntités simulées:\n- light.salon_lamp (état: off)\n- sensor.temperature (état: 22.5°C)\n- switch.tv (état: on)\n- sensor.humidity (état: 45%)"
+                }],
+                "isError": False
+            }
+        elif name == "get_state":
+            entity_id = args.get("entity_id", "unknown")
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": f"🔧 Mock: État de {entity_id}: {'on' if 'light' in entity_id else '22.5°C' if 'temperature' in entity_id else 'unknown'}"
                 }],
                 "isError": False
             }
@@ -124,7 +239,7 @@ class MockMCPServer:
             return {
                 "content": [{
                     "type": "text",
-                    "text": f"🔧 Mock: Service {domain}.{service} appelé sur {entity_id}"
+                    "text": f"🔧 Mock: Service {domain}.{service} appelé sur {entity_id} - Exécuté avec succès"
                 }],
                 "isError": False
             }
@@ -367,6 +482,36 @@ class AsyncRequestQueue:
             "stats": self.stats,
             "max_concurrent": self.max_concurrent
         }
+    
+    @property
+    def size(self) -> int:
+        """Retourne la taille totale de la queue"""
+        return sum(q.qsize() for q in self.queues.values()) + len(self.processing)
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Retourne les statistiques détaillées de la queue"""
+        total_queued = sum(q.qsize() for q in self.queues.values())
+        success_rate = 0
+        if self.stats["total_requests"] > 0:
+            success_rate = (self.stats["completed_requests"] / self.stats["total_requests"]) * 100
+        
+        return {
+            "total_queued": total_queued,
+            "processing_count": len(self.processing),
+            "completed_count": len(self.completed),
+            "queue_by_priority": {p.value: self.queues[p].qsize() for p in Priority},
+            "performance": {
+                "success_rate_percent": round(success_rate, 2),
+                "avg_processing_time_ms": round(self.stats["avg_processing_time"] * 1000, 2),
+                "total_requests": self.stats["total_requests"],
+                "completed_requests": self.stats["completed_requests"],
+                "failed_requests": self.stats["failed_requests"]
+            },
+            "capacity": {
+                "max_concurrent": self.max_concurrent,
+                "current_load_percent": round((len(self.processing) / self.max_concurrent) * 100, 2)
+            }
+        }
 
 
 # 🏊 MCPSessionPool - Gestion du pool de sessions
@@ -492,18 +637,36 @@ async def lifespan(app: FastAPI):
     await request_queue.start()
     await session_pool.start()
     
-    # Démarrer la tâche de nettoyage automatique
-    cleanup_task = asyncio.create_task(cleanup_old_data_task())
+    # Démarrer la tâche de nettoyage automatique de la BDD
+    cleanup_db_task = asyncio.create_task(cleanup_old_data_task())
+    
+    # Démarrer la tâche de nettoyage du cache (toutes les 5 minutes)
+    async def cache_cleanup_task():
+        while True:
+            try:
+                await asyncio.sleep(300)  # 5 minutes
+                cleaned = await cache_manager.cleanup()
+                if cleaned['total_cleaned'] > 0:
+                    logging.info(f"🧹 Cache cleanup: {cleaned['total_cleaned']} expired entries removed")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logging.error(f"❌ Cache cleanup error: {e}")
+    
+    cleanup_cache_task = asyncio.create_task(cache_cleanup_task())
+    logging.info("🧹 Cache cleanup task started (every 5 minutes)")
     
     yield
     
     # Shutdown
     logging.info("🛑 Shutting down HTTP-MCP Bridge Server...")
     
-    # Arrêter la tâche de nettoyage
-    cleanup_task.cancel()
+    # Arrêter les tâches de nettoyage
+    cleanup_db_task.cancel()
+    cleanup_cache_task.cancel()
     try:
-        await cleanup_task
+        await cleanup_db_task
+        await cleanup_cache_task
     except asyncio.CancelledError:
         pass
     
@@ -854,6 +1017,58 @@ async def get_statistics(days: int = 7):
         })
     except Exception as e:
         logger.error(f"Erreur récupération stats: {e}")
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=500)
+
+
+@app.get("/admin/metrics")
+async def get_metrics():
+    """Récupère les métriques du cache et du circuit breaker"""
+    try:
+        # Nettoyer les caches expirés
+        cleanup_stats = await cache_manager.cleanup()
+        
+        # Récupérer toutes les métriques
+        metrics = cache_manager.get_metrics()
+        
+        # Ajouter les stats de nettoyage
+        metrics['last_cleanup'] = cleanup_stats
+        
+        # Ajouter les métriques de session
+        session_stats = {
+            'active_sessions': len(session_pool.sessions),
+            'total_requests_processed': session_pool.total_requests,
+            'queue_size': request_queue.size,
+            'queue_stats': request_queue.get_stats()
+        }
+        metrics['session_management'] = session_stats
+        
+        return JSONResponse({
+            "status": "success",
+            "timestamp": datetime.utcnow().isoformat(),
+            "metrics": metrics
+        })
+    except Exception as e:
+        logger.error(f"Erreur récupération métriques: {e}")
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=500)
+
+
+@app.post("/admin/cache/clear")
+async def clear_cache():
+    """Vide tous les caches"""
+    try:
+        await cache_manager.clear_all_caches()
+        return JSONResponse({
+            "status": "success",
+            "message": "All caches cleared successfully"
+        })
+    except Exception as e:
+        logger.error(f"Erreur vidage cache: {e}")
         return JSONResponse({
             "status": "error",
             "message": str(e)
