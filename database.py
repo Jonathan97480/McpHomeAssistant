@@ -180,6 +180,36 @@ class DatabaseManager:
             )
         """)
         
+        # Table des configurations Home Assistant
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS ha_configs (
+                config_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                url TEXT NOT NULL,
+                token_encrypted TEXT NOT NULL,
+                is_active BOOLEAN DEFAULT 1,
+                last_test DATETIME,
+                last_status TEXT DEFAULT 'unknown',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Table de configuration système (pour clés de chiffrement)
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS system_config (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                config_type TEXT UNIQUE NOT NULL,
+                encryption_key TEXT,
+                salt TEXT,
+                config_data TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
         self.connection.commit()
     
     async def _create_indexes(self):
@@ -203,7 +233,11 @@ class DatabaseManager:
             "CREATE INDEX IF NOT EXISTS idx_sessions_access_token ON user_sessions(access_token)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_refresh_token ON user_sessions(refresh_token)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_is_active ON user_sessions(is_active)",
-            "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON user_sessions(access_token_expires)"
+            "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON user_sessions(access_token_expires)",
+            # Index pour les configurations Home Assistant
+            "CREATE INDEX IF NOT EXISTS idx_ha_configs_user_id ON ha_configs(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_ha_configs_is_active ON ha_configs(is_active)",
+            "CREATE INDEX IF NOT EXISTS idx_system_config_type ON system_config(config_type)"
         ]
         
         for index_sql in indexes:
@@ -472,6 +506,61 @@ class DatabaseManager:
                 return cursor.rowcount
         except Exception as e:
             logging.error(f"❌ Erreur execute: {e}")
+            self.connection.rollback()
+            return 0
+    
+    def fetch_one_sync(self, query: str, params: tuple = ()):
+        """Exécute une requête et retourne une seule ligne (synchrone)"""
+        try:
+            # Activer row_factory pour obtenir des dictionnaires
+            self.connection.row_factory = sqlite3.Row
+            cursor = self.connection.cursor()
+            cursor.execute(query, params)
+            result = cursor.fetchone()
+            
+            if result:
+                # Convertir Row en dictionnaire
+                return dict(result)
+            return None
+        except Exception as e:
+            logging.error(f"❌ Erreur fetch_one_sync: {e}")
+            return None
+        finally:
+            # Remettre row_factory par défaut
+            self.connection.row_factory = None
+    
+    def fetch_all_sync(self, query: str, params: tuple = ()):
+        """Exécute une requête et retourne toutes les lignes (synchrone)"""
+        try:
+            # Activer row_factory pour obtenir des dictionnaires
+            self.connection.row_factory = sqlite3.Row
+            cursor = self.connection.cursor()
+            cursor.execute(query, params)
+            results = cursor.fetchall()
+            
+            # Convertir chaque Row en dictionnaire
+            return [dict(row) for row in results]
+        except Exception as e:
+            logging.error(f"❌ Erreur fetch_all_sync: {e}")
+            return []
+        finally:
+            # Remettre row_factory par défaut
+            self.connection.row_factory = None
+    
+    def execute_sync(self, query: str, params: tuple = ()):
+        """Exécute une requête sans retour (synchrone)"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, params)
+            self.connection.commit()
+            
+            # Si c'est un INSERT, retourner l'ID du dernier insert
+            if query.strip().upper().startswith('INSERT'):
+                return cursor.lastrowid
+            else:
+                return cursor.rowcount
+        except Exception as e:
+            logging.error(f"❌ Erreur execute_sync: {e}")
             self.connection.rollback()
             return 0
 

@@ -38,6 +38,9 @@ from cache_manager import cache_manager, CircuitBreakerOpenError
 # Import du système d'authentification
 from auth_manager import auth_manager, UserCreate, UserLogin, UserResponse, TokenResponse, UserRole
 
+# Import du gestionnaire de configuration Home Assistant
+from ha_config_manager import ha_config_manager, HAConfigCreate, HAConfigUpdate, HAConfigResponse, HATestResult, cleanup_ha_manager
+
 # Variables globales pour le serveur MCP
 mcp_server = None
 ha_client = None
@@ -641,6 +644,10 @@ async def lifespan(app: FastAPI):
     await auth_manager.initialize()
     logging.info("🔐 Authentication system initialized")
     
+    # Initialiser le gestionnaire de configuration Home Assistant
+    await ha_config_manager.initialize()
+    logging.info("🏠 Home Assistant config manager initialized")
+    
     # Démarrer les composants
     await request_queue.start()
     await session_pool.start()
@@ -681,6 +688,9 @@ async def lifespan(app: FastAPI):
     # Arrêter les composants
     await request_queue.stop()
     await session_pool.stop()
+    
+    # Nettoyer le gestionnaire HA
+    await cleanup_ha_manager()
     
     # Fermer la base de données
     await db_manager.close()
@@ -1246,6 +1256,231 @@ async def get_user_sessions(current_user: UserResponse = Depends(get_current_use
             detail="Failed to retrieve sessions"
         )
 
+
+# ===================================
+# ENDPOINTS CONFIGURATION HOME ASSISTANT
+# ===================================
+
+@app.post("/config/homeassistant", response_model=HAConfigResponse)
+async def create_ha_config(
+    config_data: HAConfigCreate,
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Crée une nouvelle configuration Home Assistant"""
+    try:
+        # Créer la configuration avec test automatique
+        ha_config = await ha_config_manager.create_config(current_user.id, config_data)
+        
+        # Retourner la réponse (sans le token)
+        return HAConfigResponse(
+            config_id=1,  # Sera mis à jour avec la vraie valeur
+            name=ha_config.name,
+            url=ha_config.url,
+            is_active=ha_config.is_active,
+            last_test=ha_config.last_test,
+            last_status=ha_config.last_status.value,
+            created_at=ha_config.created_at,
+            updated_at=ha_config.updated_at
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur création config HA: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to create Home Assistant configuration: {str(e)}"
+        )
+
+
+@app.get("/config/homeassistant")
+async def list_ha_configs(
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Liste toutes les configurations Home Assistant de l'utilisateur"""
+    try:
+        configs = await ha_config_manager.list_configs(current_user.id)
+        return JSONResponse({
+            "status": "success",
+            "configs": [config.dict() for config in configs]
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur liste configs HA: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve Home Assistant configurations"
+        )
+
+
+@app.get("/config/homeassistant/{config_id}", response_model=HAConfigResponse)
+async def get_ha_config(
+    config_id: int,
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Récupère une configuration Home Assistant spécifique"""
+    try:
+        ha_config = await ha_config_manager.get_config(current_user.id, config_id)
+        
+        if not ha_config:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Home Assistant configuration not found"
+            )
+        
+        return HAConfigResponse(
+            config_id=config_id,
+            name=ha_config.name,
+            url=ha_config.url,
+            is_active=ha_config.is_active,
+            last_test=ha_config.last_test,
+            last_status=ha_config.last_status.value,
+            created_at=ha_config.created_at,
+            updated_at=ha_config.updated_at
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur récupération config HA: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve Home Assistant configuration"
+        )
+
+
+@app.put("/config/homeassistant/{config_id}", response_model=HAConfigResponse)
+async def update_ha_config(
+    config_id: int,
+    update_data: HAConfigUpdate,
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Met à jour une configuration Home Assistant"""
+    try:
+        ha_config = await ha_config_manager.update_config(current_user.id, config_id, update_data)
+        
+        if not ha_config:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Home Assistant configuration not found"
+            )
+        
+        return HAConfigResponse(
+            config_id=config_id,
+            name=ha_config.name,
+            url=ha_config.url,
+            is_active=ha_config.is_active,
+            last_test=ha_config.last_test,
+            last_status=ha_config.last_status.value,
+            created_at=ha_config.created_at,
+            updated_at=ha_config.updated_at
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur mise à jour config HA: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update Home Assistant configuration"
+        )
+
+
+@app.delete("/config/homeassistant/{config_id}")
+async def delete_ha_config(
+    config_id: int,
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Supprime une configuration Home Assistant"""
+    try:
+        success = await ha_config_manager.delete_config(current_user.id, config_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Home Assistant configuration not found"
+            )
+        
+        return JSONResponse({
+            "status": "success",
+            "message": "Home Assistant configuration deleted successfully"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur suppression config HA: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete Home Assistant configuration"
+        )
+
+
+@app.post("/config/homeassistant/{config_id}/test", response_model=HATestResult)
+async def test_ha_config(
+    config_id: int,
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Teste la connexion à Home Assistant"""
+    try:
+        # Récupérer la configuration
+        ha_config = await ha_config_manager.get_config(current_user.id, config_id)
+        if not ha_config:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Home Assistant configuration not found"
+            )
+        
+        # Récupérer le token déchiffré
+        token = await ha_config_manager.get_decrypted_token(current_user.id, config_id)
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to decrypt token"
+            )
+        
+        # Tester la connexion
+        test_result = await ha_config_manager.test_ha_connection(ha_config.url, token)
+        
+        # Mettre à jour le statut en base
+        await ha_config_manager.update_config(
+            current_user.id, 
+            config_id, 
+            HAConfigUpdate()  # Déclenche la mise à jour du last_test
+        )
+        
+        return test_result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur test config HA: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to test Home Assistant connection: {str(e)}"
+        )
+
+
+@app.post("/config/homeassistant/test", response_model=HATestResult)
+async def test_ha_connection_direct(
+    config_data: HAConfigCreate,
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Teste une connexion Home Assistant sans sauvegarder"""
+    try:
+        # Tester la connexion directement
+        test_result = await ha_config_manager.test_ha_connection(config_data.url, config_data.token)
+        return test_result
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur test direct HA: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to test Home Assistant connection: {str(e)}"
+        )
+
+
+# ===================================
+# ENDPOINTS ADMINISTRATION
+# ===================================
 
 @app.get("/admin/stats")
 async def get_statistics(days: int = 7):
