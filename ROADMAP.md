@@ -153,31 +153,37 @@ POST /config/homeassistant/test    # ✅ Test direct sans sauvegarde
 
 ---
 
-### **PHASE 3.3 : GESTION PERMISSIONS OUTILS** 🎛️ **À FAIRE**
-**État : ⏳ Planifié**
+### **PHASE 3.3 : GESTION PERMISSIONS OUTILS** ✅ **TERMINÉ**
+**État : ✅ Complété (commit d061e69)**
 
-#### 🎯 **Milestone 3.3 : Permissions granulaires par outil MCP**
-- [ ] **Permissions Database** : Table user_tool_permissions (user_id, tool_name, can_read, can_write, is_enabled)
-- [ ] **Default Permissions** : Table default_permissions pour nouveaux utilisateurs
-- [ ] **Permission Validation** : Middleware validation avant appels MCP
-- [ ] **Admin Management** : Interface admin gestion permissions globales
-- [ ] **User Preferences** : Interface utilisateur activation/désactivation outils
+#### ✅ **Milestone 3.3 : Permissions granulaires par outil MCP**
+- [x] **Permissions Database** : Tables user_tool_permissions et default_permissions avec index optimisés
+- [x] **Default Permissions** : Système d'héritage des permissions par défaut
+- [x] **Permission Validation** : Middleware validation automatique avant appels MCP
+- [x] **Admin Management** : Endpoints admin complets gestion permissions
+- [x] **User Preferences** : Interface utilisateur consultation permissions
 
-#### 🎯 **Endpoints de permissions**
+#### ✅ **Endpoints de permissions**
 ```http
-GET  /permissions/tools       # Liste outils avec permissions utilisateur
-PUT  /permissions/tools/:name # Mise à jour permission outil spécifique
-GET  /admin/permissions       # [ADMIN] Gestion permissions globales
-PUT  /admin/permissions/defaults # [ADMIN] Permissions par défaut
-POST /admin/permissions/bulk  # [ADMIN] Mise à jour permissions en masse
+POST /permissions/validate        # Validation permission individuelle
+POST /permissions/validate/bulk   # Validation permissions en lot
+GET  /permissions/me             # Résumé permissions utilisateur
+GET  /permissions/user/{id}      # [ADMIN] Permissions utilisateur spécifique
+PUT  /permissions/user/{id}      # [ADMIN] Mise à jour permissions utilisateur
+PUT  /permissions/user/{id}/bulk # [ADMIN] Mise à jour permissions en masse
+DELETE /permissions/user/{id}/tool/{name} # [ADMIN] Suppression permission
+GET  /permissions/defaults       # [ADMIN] Permissions par défaut
+PUT  /permissions/defaults       # [ADMIN] Mise à jour permissions par défaut
 ```
 
-#### 🎯 **Interface Toggle Permissions**
-- [ ] **Liste Outils MCP** : Affichage tous les outils disponibles
-- [ ] **Toggles ON/OFF** : Boutons activation/désactivation par outil
-- [ ] **Permissions Read/Write** : Gestion granulaire lecture/écriture
-- [ ] **Groupes d'outils** : Organisation par catégories (lights, sensors, scripts, etc.)
-- [ ] **Permissions Preview** : Aperçu impact changements permissions
+#### ✅ **Système de permissions complet**
+- [x] **Validation granulaire** : Permissions READ/WRITE/EXECUTE par outil MCP
+- [x] **Cache intelligent** : Système cache avec TTL 5min pour performances
+- [x] **Héritage permissions** : Permissions par défaut pour nouveaux utilisateurs
+- [x] **Permissions built-in** : Outils Home Assistant pré-configurés
+- [x] **Middleware sécurisé** : Validation automatique avec logs d'audit
+
+**📦 Livré** : Module permissions_manager.py + permissions_middleware.py complets (commit d061e69)
 
 ---
 
