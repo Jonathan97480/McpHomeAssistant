@@ -3,12 +3,15 @@
 [![MCP](https://img.shields.io/badge/MCP-Compatible-green)](https://modelcontextprotocol.io/)
 [![Python](https://img.shields.io/badge/Python-3.8+-blue)](https://www.python.org/)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-Compatible-orange)](https://www.home-assistant.io/)
+[![Phase](https://img.shields.io/badge/Phase%203.4-Complete-brightgreen)](docs/PHASE_3_4_SUMMARY.md)
 
-A powerful Model Context Protocol (MCP) server for integrating Home Assistant with AI agents like Claude Desktop.
+Un serveur Model Context Protocol (MCP) puissant avec **interface web complète** pour intégrer Home Assistant avec les agents IA.
 
-> **🍓 Raspberry Pi Ready!** This server includes a standalone HTTP mode specifically designed for easy deployment on Raspberry Pi 3B+ alongside Home Assistant. The `install.sh` script provides automated installation optimized for Pi hardware.
+> **� Interface Web Complète !** Phase 3.4 inclut une interface web responsive avec dashboard, authentification, gestion des permissions et configuration multi-instances Home Assistant. Installation automatisée pour Raspberry Pi.
 
-[🇫🇷 Version française](#version-française)
+> **🍓 Raspberry Pi Ready!** Installation optimisée pour Raspberry Pi 3B+ avec script automatisé `install.sh`.
+
+[🇫🇷 Version française](#version-française) | [📚 Documentation](docs/) | [🧪 Tests](tests/)
 
 ## ✨ Features
 
@@ -53,6 +56,21 @@ The HTTP server provides a complete REST API interface to Home Assistant:
 - **Automation scripts**: Use any programming language to automate your home
 - **Third-party integrations**: Connect non-MCP services to Home Assistant
 - **Development testing**: Quick API testing with curl or Postman
+
+### Quick Installation
+
+**Automatic Installation:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/Jonathan97480/McpHomeAssistant/master/install.sh | bash
+```
+
+**Manual Installation:**
+```bash
+git clone https://github.com/Jonathan97480/McpHomeAssistant.git
+cd McpHomeAssistant
+chmod +x install.sh
+./install.sh
+```
 
 ### Quick HTTP Server Start
 
@@ -836,12 +854,48 @@ Le serveur MCP expose **8 outils** pour interagir avec Home Assistant :
         message: "Bonne journée !"
 ```
 
-## 📚 Documentation
+## � Structure du Projet
 
-- **[Guide de démarrage rapide](docs/QUICKSTART.md)** - Installation et configuration rapide
-- **[Architecture](docs/ARCHITECTURE.md)** - Documentation technique détaillée
-- **[Tests](tests/README.md)** - Guide des scripts de test
-- **[Exemples](examples/README.md)** - Exemples et configurations
+```
+McpHomeAssistant/
+├── 📂 docs/                    # 📚 Documentation complète
+│   ├── DEPLOYMENT_GUIDE.md     # Guide de déploiement
+│   ├── PHASE_3_4_README.md     # Documentation Phase 3.4
+│   ├── QUICK_INSTALL_RPI.md    # Installation rapide
+│   └── ...                     # Autres guides
+├── 📂 tests/                   # 🧪 Suite de tests
+│   ├── test_simple.py          # Tests rapides
+│   ├── test_complete.py        # Tests complets
+│   ├── test_web_interface.py   # Tests interface web
+│   └── ...                     # Autres tests
+├── 📂 web/                     # 🌐 Interface Web Phase 3.4
+│   ├── static/css/main.css     # Framework CSS responsive
+│   ├── static/js/dashboard.js  # SPA JavaScript
+│   └── templates/              # Templates HTML
+├── 📂 src/                     # 📦 Code source principal
+├── 📂 configs/                 # ⚙️ Configurations
+├── 📂 examples/                # 💡 Exemples d'usage
+├── 🚀 install.sh               # Script installation unifié
+├── 🏠 bridge_server.py         # Serveur principal
+├── 🖥️ start_server.py          # Script de démarrage
+└── 📋 README.md                # Ce fichier
+```
+
+## �📚 Documentation
+
+### 🚀 Installation et Déploiement
+- **[Guide de déploiement complet](docs/DEPLOYMENT_GUIDE.md)** - Installation production
+- **[Installation rapide Raspberry Pi](docs/QUICK_INSTALL_RPI.md)** - Guide express
+- **[Installation détaillée Pi](docs/RASPBERRY_PI_INSTALL.md)** - Guide complet Pi
+
+### 🏗️ Architecture et Développement
+- **[Architecture système](docs/ARCHITECTURE.md)** - Documentation technique
+- **[API REST](docs/API_DOCUMENTATION.md)** - Documentation API complète
+- **[Phase 3.4](docs/PHASE_3_4_README.md)** - Interface web complète
+
+### 🧪 Tests et Validation
+- **[Guide des tests](tests/README.md)** - Suite de tests complète
+- **[Examples d'usage](examples/README.md)** - Exemples pratiques
 
 ## 🔧 Développement
 

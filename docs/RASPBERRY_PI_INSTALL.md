@@ -1,347 +1,442 @@
-# 🍓 Raspberry Pi Installation Guide
+# 🍓 Installation sur Raspberry Pi - Guide Complet
 
-This guide explains how to install the Home Assistant MCP Server directly on your Raspberry Pi, making it run as a local service alongside Home Assistant.
+## 📋 **Vue d'ensemble**
+Ce guide vous permet d'installer et configurer le serveur MCP Bridge avec interface web sur votre Raspberry Pi.
 
-## 📋 Prerequisites
+## 🔧 **Prérequis Système**
 
-- Raspberry Pi running Debian/Raspbian
-- Home Assistant already installed and running
-- SSH access to your Raspberry Pi
-- Internet connection
+### **Raspberry Pi recommandé**
+- **Raspberry Pi 4** (2GB RAM minimum, 4GB recommandé)
+- **Raspberry Pi OS Lite** ou Desktop (Debian 11/12)
+- **Carte SD** 32GB minimum (Classe 10)
+- **Connexion Internet** stable
 
-## 🚀 Quick Installation
-
-### Option 1: Automated Installation (Recommended)
-
-Run this single command on your Raspberry Pi:
-
+### **Vérification système**
 ```bash
-curl -sSL https://raw.githubusercontent.com/Jonathan97480/McpHomeAssistant/master/install.sh | bash
+# Vérifier la version du système
+cat /etc/os-release
+
+# Vérifier l'espace disque (minimum 2GB libre)
+df -h
+
+# Vérifier la mémoire (minimum 1GB disponible)
+free -h
+
+# Vérifier Python (doit être 3.8+)
+python3 --version
 ```
 
-### Option 2: Manual Installation
+## 📦 **Installation des Dépendances**
 
-If you prefer to install manually, follow these steps:
-
-#### 1. Connect to your Raspberry Pi
-
-```bash
-ssh homeassistant@192.168.1.22
-# Replace with your Pi's IP address
-```
-
-#### 2. Update System
-
+### **1. Mise à jour du système**
 ```bash
 sudo apt update && sudo apt upgrade -y
 ```
 
-#### 3. Install Dependencies
-
+### **2. Installation Python et outils**
 ```bash
-sudo apt install -y python3-pip python3-venv python3-dev git curl build-essential libffi-dev libssl-dev
+# Installation Python 3 et pip
+sudo apt install python3 python3-pip python3-venv git -y
+
+# Installation des dépendances système
+sudo apt install build-essential libssl-dev libffi-dev python3-dev -y
+
+# Installation SQLite (normalement déjà présent)
+sudo apt install sqlite3 -y
 ```
 
-#### 4. Create Installation Directory
-
+### **3. Installation Node.js (optionnel pour développement)**
 ```bash
-sudo mkdir -p /opt/homeassistant-mcp-server
-sudo chown -R $USER:$USER /opt/homeassistant-mcp-server
-cd /opt/homeassistant-mcp-server
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install nodejs -y
 ```
 
-#### 5. Clone Repository
+## 🚀 **Installation du Projet**
 
+### **1. Clonage du repository**
 ```bash
-git clone https://github.com/Jonathan97480/McpHomeAssistant.git .
+# Aller dans le dossier home
+cd ~
+
+# Cloner le projet
+git clone https://github.com/Jonathan97480/McpHomeAssistant.git
+
+# Aller dans le dossier
+cd McpHomeAssistant
 ```
 
-#### 6. Create Virtual Environment
-
+### **2. Création environnement virtuel**
 ```bash
+# Créer l'environnement virtuel
 python3 -m venv venv
+
+# Activer l'environnement
 source venv/bin/activate
+
+# Mettre à jour pip
 pip install --upgrade pip
-pip install -e .
 ```
 
-#### 7. Create Configuration File
-
+### **3. Installation des dépendances Python**
 ```bash
-cat > .env << EOF
-HASS_URL=http://localhost:8123
-HASS_TOKEN=your_token_here
-MCP_SERVER_HOST=0.0.0.0
-MCP_SERVER_PORT=3000
-LOG_LEVEL=INFO
-EOF
+# Installation des packages requis
+pip install fastapi uvicorn pydantic httpx
+pip install aiohttp cryptography
+pip install bcrypt python-jose[cryptography] python-multipart passlib
+pip install email-validator
+pip install requests  # Pour les tests
+
+# Vérifier l'installation
+pip list
 ```
 
-## 🔑 Configuration
+## ⚙️ **Configuration**
 
-### 1. Get Home Assistant Token
-
-1. Open Home Assistant web interface
-2. Go to **Profile** → **Long-lived access tokens**
-3. Click **Create Token**
-4. Copy the generated token
-
-### 2. Update Configuration
-
+### **1. Vérification des fichiers**
 ```bash
-nano /opt/homeassistant-mcp-server/.env
+# Vérifier que tous les fichiers sont présents
+ls -la
+
+# Vérifier la structure web
+ls -la web/
+ls -la web/static/
+ls -la web/templates/
 ```
 
-Replace `your_token_here` with your actual token:
-
-```env
-HASS_URL=http://localhost:8123
-HASS_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-MCP_SERVER_HOST=0.0.0.0
-MCP_SERVER_PORT=3000
-LOG_LEVEL=INFO
-```
-
-## 🛠️ Service Configuration
-
-### Create Systemd Service
-
+### **2. Test d'import Python**
 ```bash
-sudo tee /etc/systemd/system/homeassistant-mcp-server.service > /dev/null << EOF
+# Tester l'import du serveur
+python3 -c "import bridge_server; print('✅ Import réussi')"
+```
+
+### **3. Configuration des ports**
+```bash
+# Vérifier que le port 8080 est libre
+sudo netstat -tulpn | grep :8080
+
+# Si occupé, modifier dans bridge_server.py ou start_server.py
+# Le port par défaut est 8080
+```
+
+## 🏃 **Démarrage du Serveur**
+
+### **1. Premier démarrage (test)**
+```bash
+# Activer l'environnement virtuel si pas déjà fait
+source venv/bin/activate
+
+# Démarrer le serveur en mode test
+python3 start_server.py
+```
+
+### **2. Vérification du fonctionnement**
+Dans un autre terminal :
+```bash
+# Test simple
+curl http://localhost:8080/health
+
+# Test complet (si requests installé)
+cd ~/McpHomeAssistant
+source venv/bin/activate
+python3 test_simple.py
+```
+
+### **3. Accès depuis un autre appareil**
+```bash
+# Trouver l'IP du Raspberry Pi
+hostname -I
+
+# Accéder depuis votre ordinateur/téléphone
+# http://IP_DU_RPI:8080
+# Exemple: http://192.168.1.100:8080
+```
+
+## 🔒 **Configuration Sécurisée**
+
+### **1. Utilisateur dédié (recommandé)**
+```bash
+# Créer un utilisateur pour le service
+sudo useradd -m -s /bin/bash mcpbridge
+sudo usermod -aG sudo mcpbridge
+
+# Copier le projet vers le nouvel utilisateur
+sudo cp -r ~/McpHomeAssistant /home/mcpbridge/
+sudo chown -R mcpbridge:mcpbridge /home/mcpbridge/McpHomeAssistant
+```
+
+### **2. Configuration firewall**
+```bash
+# Installer ufw si pas présent
+sudo apt install ufw -y
+
+# Configurer le firewall
+sudo ufw allow ssh
+sudo ufw allow 8080/tcp
+sudo ufw enable
+
+# Vérifier les règles
+sudo ufw status
+```
+
+### **3. Configuration SSL (optionnel)**
+```bash
+# Installer certbot pour Let's Encrypt
+sudo apt install certbot -y
+
+# OU utiliser un reverse proxy Nginx
+sudo apt install nginx -y
+```
+
+## 🚀 **Service Systemd (Démarrage Automatique)**
+
+### **1. Créer le fichier service**
+```bash
+sudo nano /etc/systemd/system/mcpbridge.service
+```
+
+### **2. Contenu du fichier service**
+```ini
 [Unit]
-Description=Home Assistant MCP Server
-After=network.target homeassistant.service
-Wants=homeassistant.service
+Description=MCP Bridge Server with Web Interface
+After=network.target
 
 [Service]
 Type=simple
-User=homeassistant
-Group=homeassistant
-WorkingDirectory=/opt/homeassistant-mcp-server
-Environment=PATH=/opt/homeassistant-mcp-server/venv/bin
-ExecStart=/opt/homeassistant-mcp-server/venv/bin/python -m homeassistant_mcp_server.server
-EnvironmentFile=/opt/homeassistant-mcp-server/.env
+User=mcpbridge
+Group=mcpbridge
+WorkingDirectory=/home/mcpbridge/McpHomeAssistant
+Environment=PATH=/home/mcpbridge/McpHomeAssistant/venv/bin
+ExecStart=/home/mcpbridge/McpHomeAssistant/venv/bin/python start_server.py
 Restart=always
 RestartSec=10
+
+# Logs
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=mcpbridge
+
+# Sécurité
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/mcpbridge/McpHomeAssistant
 
 [Install]
 WantedBy=multi-user.target
-EOF
 ```
 
-### Enable and Start Service
-
+### **3. Activation du service**
 ```bash
+# Recharger systemd
 sudo systemctl daemon-reload
-sudo systemctl enable homeassistant-mcp-server
-sudo systemctl start homeassistant-mcp-server
+
+# Activer le service
+sudo systemctl enable mcpbridge
+
+# Démarrer le service
+sudo systemctl start mcpbridge
+
+# Vérifier le statut
+sudo systemctl status mcpbridge
+
+# Voir les logs
+sudo journalctl -u mcpbridge -f
 ```
 
-## 🧪 Testing
+## 📊 **Monitoring et Logs**
 
-### 1. Check Service Status
-
+### **1. Logs du système**
 ```bash
-sudo systemctl status homeassistant-mcp-server
+# Logs du service
+sudo journalctl -u mcpbridge --since today
+
+# Logs en temps réel
+sudo journalctl -u mcpbridge -f
+
+# Logs d'erreur uniquement
+sudo journalctl -u mcpbridge -p err
 ```
 
-Expected output:
-```
-● homeassistant-mcp-server.service - Home Assistant MCP Server
-   Loaded: loaded (/etc/systemd/system/homeassistant-mcp-server.service; enabled; vendor preset: enabled)
-   Active: active (running) since...
-```
-
-### 2. View Logs
-
+### **2. Monitoring système**
 ```bash
-# Real-time logs
-journalctl -u homeassistant-mcp-server -f
+# Utilisation CPU/Mémoire
+top
+htop  # Si installé: sudo apt install htop
 
-# Recent logs
-journalctl -u homeassistant-mcp-server --since "1 hour ago"
+# Espace disque
+df -h
+
+# Processus du serveur
+ps aux | grep python
 ```
 
-### 3. Test Connection
-
+### **3. Scripts de maintenance**
 ```bash
-cd /opt/homeassistant-mcp-server
-source venv/bin/activate
-python tests/test_connection.py
-```
-
-### 4. Test MCP Tools
-
-```bash
-python tests/test_mcp_tools.py
-```
-
-## 🌐 Network Access
-
-The MCP server will be available on:
-- **Local**: `http://localhost:3000`
-- **Network**: `http://192.168.1.22:3000` (replace with your Pi's IP)
-
-### Configure Firewall (if needed)
-
-```bash
-sudo ufw allow 3000/tcp
-```
-
-## 🔧 AI Client Configuration
-
-### For Claude Desktop (on another machine)
-
-Update your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "homeassistant": {
-      "command": "stdio-proxy",
-      "args": ["http://192.168.1.22:3000"],
-      "env": {}
-    }
-  }
-}
-```
-
-### For LM Studio (on another machine)
-
-1. Open LM Studio
-2. Go to Settings → MCP Servers
-3. Add server:
-   - **Name**: `homeassistant`
-   - **URL**: `http://192.168.1.22:3000`
-
-## 📊 Monitoring
-
-### Check Resource Usage
-
-```bash
-# CPU and Memory usage
-top -p $(pgrep -f homeassistant-mcp-server)
-
-# Disk usage
-df -h /opt/homeassistant-mcp-server
-```
-
-### Log Rotation
-
-Create log rotation configuration:
-
-```bash
-sudo tee /etc/logrotate.d/homeassistant-mcp-server << EOF
-/var/log/homeassistant-mcp-server.log {
-    daily
-    rotate 7
-    compress
-    delaycompress
-    missingok
-    notifempty
-    postrotate
-        systemctl reload homeassistant-mcp-server
-    endscript
-}
-EOF
-```
-
-## 🔄 Updates
-
-### Update the Server
-
-```bash
-cd /opt/homeassistant-mcp-server
-git pull
-source venv/bin/activate
-pip install -e .
-sudo systemctl restart homeassistant-mcp-server
-```
-
-### Auto-Update Script
-
-Create an update script:
-
-```bash
-cat > /opt/homeassistant-mcp-server/update.sh << 'EOF'
+# Créer un script de sauvegarde
+cat > ~/backup_mcpbridge.sh << 'EOF'
 #!/bin/bash
-cd /opt/homeassistant-mcp-server
-git pull
-source venv/bin/activate
-pip install -e .
-sudo systemctl restart homeassistant-mcp-server
-echo "Update completed!"
+DATE=$(date +%Y%m%d_%H%M%S)
+tar -czf ~/backups/mcpbridge_$DATE.tar.gz -C /home/mcpbridge McpHomeAssistant
+echo "Backup créé: mcpbridge_$DATE.tar.gz"
 EOF
 
-chmod +x /opt/homeassistant-mcp-server/update.sh
+chmod +x ~/backup_mcpbridge.sh
+mkdir -p ~/backups
 ```
 
-## 🛡️ Security
+## 🌐 **Accès à l'Interface Web**
 
-### Firewall Configuration
+### **1. URL d'accès**
+```
+http://IP_DU_RPI:8080
+```
 
+### **2. Compte administrateur par défaut**
+- **Utilisateur** : `admin`
+- **Mot de passe** : `Admin123!`
+
+⚠️ **Changez immédiatement ce mot de passe** après la première connexion !
+
+### **3. Configuration Home Assistant**
+1. Aller dans **Configuration**
+2. Ajouter votre instance Home Assistant :
+   - URL : `http://IP_HOME_ASSISTANT:8123`
+   - Token : Générer un token Long-Term dans HA
+3. Tester la connexion
+
+## 🔧 **Résolution de Problèmes**
+
+### **Problèmes courants**
+
+#### **Port déjà utilisé**
 ```bash
-# Allow only local network access
-sudo ufw allow from 192.168.1.0/24 to any port 3000
-
-# Or allow specific IP only
-sudo ufw allow from 192.168.1.100 to any port 3000
+# Changer le port dans start_server.py
+nano start_server.py
+# Modifier: port=8080 vers port=8081
 ```
 
-### SSL/HTTPS (Optional)
-
-For secure connections, consider setting up a reverse proxy with nginx:
-
+#### **Erreur de permissions**
 ```bash
-sudo apt install nginx
-sudo nano /etc/nginx/sites-available/mcp-server
+# Corriger les permissions
+sudo chown -R mcpbridge:mcpbridge /home/mcpbridge/McpHomeAssistant
+chmod +x start_server.py
 ```
 
-## 🆘 Troubleshooting
-
-### Common Issues
-
-1. **Service won't start**
-   ```bash
-   journalctl -u homeassistant-mcp-server -n 50
-   ```
-
-2. **Permission errors**
-   ```bash
-   sudo chown -R homeassistant:homeassistant /opt/homeassistant-mcp-server
-   ```
-
-3. **Port already in use**
-   ```bash
-   sudo netstat -tulpn | grep 3000
-   ```
-
-4. **Home Assistant connection fails**
-   - Check if Home Assistant is running: `sudo systemctl status homeassistant`
-   - Verify token in `/opt/homeassistant-mcp-server/.env`
-   - Test manually: `curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8123/api/`
-
-### Performance Tuning
-
-For better performance on Raspberry Pi:
-
+#### **Erreur de mémoire**
 ```bash
-# Increase swap (if needed)
-sudo dphys-swapfile swapoff
-sudo nano /etc/dphys-swapfile  # Set CONF_SWAPSIZE=1024
-sudo dphys-swapfile setup
-sudo dphys-swapfile swapon
+# Augmenter le swap si RAM insuffisante
+sudo fallocate -l 1G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
 ```
 
-## 📚 Additional Resources
+#### **Base de données corrompue**
+```bash
+# Supprimer et recréer la base
+rm bridge_data.db
+python3 -c "from database import create_tables; create_tables()"
+```
 
-- [Main Documentation](../README.md)
-- [Architecture Guide](../docs/ARCHITECTURE.md)
-- [Configuration Examples](../examples/README.md)
-- [GitHub Repository](https://github.com/Jonathan97480/McpHomeAssistant)
+### **Logs de debug**
+```bash
+# Démarrer en mode debug
+source venv/bin/activate
+python3 bridge_server.py --debug
 
----
+# Ou avec logs détaillés
+PYTHONPATH=. python3 -m uvicorn bridge_server:app --host 0.0.0.0 --port 8080 --log-level debug
+```
 
-🎉 **Your Home Assistant MCP Server is now running locally on your Raspberry Pi!**
+## 📈 **Performance Raspberry Pi**
+
+### **Optimisations recommandées**
+
+#### **1. Configuration mémoire**
+```bash
+# Augmenter la split mémoire GPU/CPU
+sudo nano /boot/config.txt
+# Ajouter: gpu_mem=16
+```
+
+#### **2. Désactiver services inutiles**
+```bash
+# Désactiver Bluetooth si pas utilisé
+sudo systemctl disable bluetooth
+sudo systemctl disable hciuart
+
+# Désactiver WiFi si Ethernet utilisé
+sudo systemctl disable wpa_supplicant
+```
+
+#### **3. Configuration base de données**
+```bash
+# Optimiser SQLite pour Raspberry Pi
+# (Déjà configuré dans database.py)
+```
+
+## 🎯 **Tests de Performance**
+
+### **Test de charge simple**
+```bash
+# Installer Apache bench
+sudo apt install apache2-utils -y
+
+# Test de charge basic
+ab -n 100 -c 10 http://localhost:8080/health
+
+# Test avec authentification
+# (Configurer avec token JWT)
+```
+
+### **Monitoring ressources**
+```bash
+# Script de monitoring
+cat > ~/monitor.sh << 'EOF'
+#!/bin/bash
+while true; do
+    echo "=== $(date) ==="
+    echo "CPU: $(vcgencmd measure_temp)"
+    echo "RAM: $(free -m | grep Mem | awk '{print $3"/"$2" MB"}')"
+    echo "Disk: $(df -h / | tail -1 | awk '{print $3"/"$2" ("$5")"}')"
+    echo "Load: $(uptime | awk -F'load average:' '{print $2}')"
+    echo "---"
+    sleep 60
+done
+EOF
+
+chmod +x ~/monitor.sh
+```
+
+## ✅ **Checklist Final**
+
+- [ ] Raspberry Pi mis à jour
+- [ ] Python 3.8+ installé
+- [ ] Dépendances système installées
+- [ ] Repository cloné
+- [ ] Environnement virtuel créé
+- [ ] Dépendances Python installées
+- [ ] Import du serveur testé
+- [ ] Serveur démarre sans erreur
+- [ ] Interface web accessible
+- [ ] Tests automatiques passent
+- [ ] Service systemd configuré (optionnel)
+- [ ] Firewall configuré
+- [ ] Compte admin sécurisé
+- [ ] Home Assistant connecté
+- [ ] Backup configuré
+
+## 🎊 **Installation Terminée !**
+
+Votre serveur MCP Bridge est maintenant installé et fonctionnel sur Raspberry Pi !
+
+**Accès** : http://IP_DU_RPI:8080  
+**Admin** : admin / Admin123! (à changer)
+
+N'oubliez pas de :
+1. Changer le mot de passe admin
+2. Configurer votre Home Assistant
+3. Tester toutes les fonctionnalités
+4. Configurer des sauvegardes régulières
+
+Pour tout problème, consultez les logs avec : `sudo journalctl -u mcpbridge -f`
