@@ -38,7 +38,7 @@ from database import db_manager, log_manager, setup_database, cleanup_old_data_t
 from cache_manager import cache_manager, CircuitBreakerOpenError
 
 # Import du système d'authentification
-from auth_manager import auth_manager, UserCreate, UserLogin, UserResponse, TokenResponse, UserRole
+from auth_manager import auth_manager, UserCreate, UserLogin, UserResponse, TokenResponse, UserRole, RefreshRequest
 
 # Import du gestionnaire de configuration Home Assistant
 from ha_config_manager import ha_config_manager, HAConfigCreate, HAConfigUpdate, HAConfigResponse, HATestResult, cleanup_ha_manager
@@ -1031,11 +1031,19 @@ async def bridge_status():
 
 
 # 🔐 Authentication Dependencies
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)  # Ne pas lever d'erreur automatiquement
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> UserResponse:
     """Dépendance pour obtenir l'utilisateur actuel depuis le token JWT"""
     try:
+        # Vérifier si les credentials sont fournis
+        if not credentials:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
         token = credentials.credentials
         token_data = auth_manager.verify_token(token)
         
@@ -1107,13 +1115,7 @@ async def register_user(user_data: UserCreate, request: Request):
         user = await auth_manager.create_user(user_data)
         
         # Log pour audit
-        await db_manager.log_request(
-            endpoint="/auth/register",
-            method="POST",
-            user_id=user.id,
-            ip_address=ip_address,
-            status_code=201
-        )
+        await log_request(request, 0, 201)
         
         return user
         
@@ -1176,12 +1178,12 @@ async def login_user(login_data: UserLogin, request: Request):
         )
 
 @app.post("/auth/refresh", response_model=TokenResponse)
-async def refresh_access_token(refresh_token: str, request: Request):
+async def refresh_access_token(refresh_request: RefreshRequest, request: Request):
     """Rafraîchit un token d'accès"""
     try:
         ip_address = get_client_ip(request)
         
-        token_response = await auth_manager.refresh_token(refresh_token)
+        token_response = await auth_manager.refresh_token(refresh_request.refresh_token)
         if not token_response:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -1190,13 +1192,7 @@ async def refresh_access_token(refresh_token: str, request: Request):
             )
         
         # Log refresh réussi
-        await db_manager.log_request(
-            endpoint="/auth/refresh",
-            method="POST",
-            user_id=token_response.user.id,
-            ip_address=ip_address,
-            status_code=200
-        )
+        await log_request(request, 0, 200)
         
         return token_response
         
@@ -1221,13 +1217,7 @@ async def logout_user(current_user: UserResponse = Depends(get_current_user),
         success = await auth_manager.revoke_session(credentials.credentials)
         
         # Log déconnexion
-        await db_manager.log_request(
-            endpoint="/auth/logout",
-            method="POST",
-            user_id=current_user.id,
-            ip_address=ip_address,
-            status_code=200
-        )
+        await log_request(request, 0, 200)
         
         logger.info(f"✅ User logged out: {current_user.username}")
         

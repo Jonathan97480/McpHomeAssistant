@@ -84,6 +84,11 @@ class UserLogin(BaseModel):
     password: str
 
 
+class RefreshRequest(BaseModel):
+    """Modèle pour demande de rafraîchissement de token"""
+    refresh_token: str
+
+
 class UserResponse(BaseModel):
     """Modèle de réponse utilisateur (sans mot de passe)"""
     id: int
