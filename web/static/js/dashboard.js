@@ -647,6 +647,11 @@ class MCPDashboard {
 
 // Initialiser le dashboard au chargement de la page
 document.addEventListener('DOMContentLoaded', () => {
+    // Vérifier si l'initialisation doit être ignorée (page de login)
+    if (window.skipDashboardInit) {
+        console.log('🚫 Initialisation MCPDashboard ignorée');
+        return;
+    }
     window.dashboard = new MCPDashboard();
 });
 
