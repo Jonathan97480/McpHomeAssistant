@@ -210,6 +210,39 @@ class DatabaseManager:
             )
         """)
         
+        # Table des permissions par défaut pour les outils MCP
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS default_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tool_name TEXT UNIQUE NOT NULL,
+                can_read BOOLEAN DEFAULT 1,
+                can_write BOOLEAN DEFAULT 0,
+                is_enabled BOOLEAN DEFAULT 1,
+                tool_category TEXT DEFAULT 'general',
+                description TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Table des permissions utilisateur pour les outils MCP
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS user_tool_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                tool_name TEXT NOT NULL,
+                can_read BOOLEAN DEFAULT 1,
+                can_write BOOLEAN DEFAULT 0,
+                is_enabled BOOLEAN DEFAULT 1,
+                custom_settings TEXT,
+                last_used DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+                UNIQUE(user_id, tool_name)
+            )
+        """)
+        
         self.connection.commit()
     
     async def _create_indexes(self):
@@ -237,7 +270,14 @@ class DatabaseManager:
             # Index pour les configurations Home Assistant
             "CREATE INDEX IF NOT EXISTS idx_ha_configs_user_id ON ha_configs(user_id)",
             "CREATE INDEX IF NOT EXISTS idx_ha_configs_is_active ON ha_configs(is_active)",
-            "CREATE INDEX IF NOT EXISTS idx_system_config_type ON system_config(config_type)"
+            "CREATE INDEX IF NOT EXISTS idx_system_config_type ON system_config(config_type)",
+            # Index pour les permissions
+            "CREATE INDEX IF NOT EXISTS idx_default_permissions_tool_name ON default_permissions(tool_name)",
+            "CREATE INDEX IF NOT EXISTS idx_default_permissions_category ON default_permissions(tool_category)",
+            "CREATE INDEX IF NOT EXISTS idx_user_permissions_user_id ON user_tool_permissions(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_user_permissions_tool_name ON user_tool_permissions(tool_name)",
+            "CREATE INDEX IF NOT EXISTS idx_user_permissions_enabled ON user_tool_permissions(is_enabled)",
+            "CREATE INDEX IF NOT EXISTS idx_user_permissions_composite ON user_tool_permissions(user_id, tool_name)"
         ]
         
         for index_sql in indexes:

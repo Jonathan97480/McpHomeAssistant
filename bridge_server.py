@@ -41,6 +41,10 @@ from auth_manager import auth_manager, UserCreate, UserLogin, UserResponse, Toke
 # Import du gestionnaire de configuration Home Assistant
 from ha_config_manager import ha_config_manager, HAConfigCreate, HAConfigUpdate, HAConfigResponse, HATestResult, cleanup_ha_manager
 
+# Import du système de permissions
+from permissions_manager import PermissionsManager, PermissionType
+from permissions_middleware import permissions_middleware
+
 # Variables globales pour le serveur MCP
 mcp_server = None
 ha_client = None
@@ -1564,6 +1568,386 @@ async def manual_cleanup(days_to_keep: int = 30):
         logger.error(f"Erreur nettoyage manuel: {e}")
         return JSONResponse({
             "status": "error", 
+            "message": str(e)
+        }, status_code=500)
+
+
+# ================================
+# 🔐 PERMISSIONS ENDPOINTS
+# ================================
+
+# Models pour les permissions
+class PermissionRequest(BaseModel):
+    tool_name: str = Field(..., description="Nom de l'outil MCP")
+    permission_type: str = Field(..., description="Type de permission (READ/WRITE/EXECUTE)")
+
+class BulkPermissionRequest(BaseModel):
+    permissions: List[PermissionRequest] = Field(..., description="Liste des permissions à vérifier")
+
+class UserPermissionUpdate(BaseModel):
+    tool_name: str = Field(..., description="Nom de l'outil MCP")
+    can_read: bool = Field(default=False, description="Permission de lecture")
+    can_write: bool = Field(default=False, description="Permission d'écriture")
+    can_execute: bool = Field(default=False, description="Permission d'exécution")
+
+class BulkUserPermissionUpdate(BaseModel):
+    permissions: List[UserPermissionUpdate] = Field(..., description="Liste des permissions à mettre à jour")
+
+class DefaultPermissionUpdate(BaseModel):
+    tool_name: str = Field(..., description="Nom de l'outil MCP")
+    can_read: bool = Field(default=False, description="Permission de lecture par défaut")
+    can_write: bool = Field(default=False, description="Permission d'écriture par défaut")
+    can_execute: bool = Field(default=False, description="Permission d'exécution par défaut")
+
+@app.post("/permissions/validate")
+async def validate_permission(
+    request: PermissionRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())
+):
+    """Valide une permission spécifique pour l'utilisateur courant"""
+    try:
+        # Valider le type de permission
+        try:
+            permission_type = PermissionType(request.permission_type.upper())
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Type de permission invalide: {request.permission_type}"
+            )
+        
+        # Valider la permission
+        validation_result = await permissions_middleware.validate_mcp_permission(
+            request=None,  # Pas besoin de request object ici
+            tool_name=request.tool_name,
+            permission_type=permission_type,
+            credentials=credentials
+        )
+        
+        return JSONResponse({
+            "status": "success",
+            "granted": True,
+            "tool_name": request.tool_name,
+            "permission_type": request.permission_type,
+            "user_id": validation_result['user_id'],
+            "timestamp": validation_result['timestamp']
+        })
+        
+    except HTTPException as he:
+        return JSONResponse({
+            "status": "denied",
+            "granted": False,
+            "tool_name": request.tool_name,
+            "permission_type": request.permission_type,
+            "reason": he.detail
+        }, status_code=he.status_code)
+    except Exception as e:
+        logger.error(f"Erreur validation permission: {e}")
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=500)
+
+@app.post("/permissions/validate/bulk")
+async def validate_bulk_permissions(
+    request: BulkPermissionRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())
+):
+    """Valide plusieurs permissions en une seule fois"""
+    try:
+        # Convertir en format attendu par le middleware
+        tool_permissions = []
+        for perm in request.permissions:
+            tool_permissions.append({
+                'tool_name': perm.tool_name,
+                'permission_type': perm.permission_type
+            })
+        
+        # Valider toutes les permissions
+        validation_result = await permissions_middleware.validate_bulk_permissions(
+            request=None,  # Pas besoin de request object ici
+            tool_permissions=tool_permissions,
+            credentials=credentials
+        )
+        
+        return JSONResponse({
+            "status": "success",
+            "all_granted": True,
+            "user_id": validation_result['user_id'],
+            "results": validation_result['results'],
+            "timestamp": validation_result['timestamp']
+        })
+        
+    except HTTPException as he:
+        return JSONResponse({
+            "status": "denied",
+            "all_granted": False,
+            "reason": he.detail,
+            "results": []
+        }, status_code=he.status_code)
+    except Exception as e:
+        logger.error(f"Erreur validation permissions bulk: {e}")
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=500)
+
+@app.get("/permissions/me")
+async def get_my_permissions(
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())
+):
+    """Obtient toutes les permissions de l'utilisateur courant"""
+    try:
+        # Obtenir l'utilisateur depuis le token
+        from permissions_middleware import get_current_user_from_token
+        user_data = await get_current_user_from_token(credentials.credentials)
+        if not user_data:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token invalide"
+            )
+        
+        user_id = user_data.get('user_id')
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User ID invalide"
+            )
+        
+        # Obtenir le résumé des permissions
+        summary = await permissions_middleware.get_user_permissions_summary(user_id)
+        
+        return JSONResponse({
+            "status": "success",
+            "data": summary
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur obtention permissions: {e}")
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=500)
+
+@app.get("/permissions/user/{user_id}")
+async def get_user_permissions(
+    user_id: int,
+    current_user: UserResponse = Depends(get_current_admin_user)
+):
+    """Obtient toutes les permissions d'un utilisateur spécifique (admin uniquement)"""
+    try:
+        # Obtenir le résumé des permissions
+        summary = await permissions_middleware.get_user_permissions_summary(user_id)
+        
+        return JSONResponse({
+            "status": "success",
+            "data": summary
+        })
+        
+    except Exception as e:
+        logger.error(f"Erreur obtention permissions utilisateur {user_id}: {e}")
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=500)
+
+@app.put("/permissions/user/{user_id}")
+async def update_user_permissions(
+    user_id: int,
+    request: UserPermissionUpdate,
+    current_user: UserResponse = Depends(get_current_admin_user)
+):
+    """Met à jour les permissions d'un utilisateur spécifique (admin uniquement)"""
+    try:
+        permissions_manager = PermissionsManager()
+        
+        # Mettre à jour les permissions
+        success = await permissions_manager.set_user_permission(
+            user_id=user_id,
+            tool_name=request.tool_name,
+            can_read=request.can_read,
+            can_write=request.can_write,
+            can_execute=request.can_execute
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Impossible de mettre à jour les permissions"
+            )
+        
+        return JSONResponse({
+            "status": "success",
+            "message": f"Permissions mises à jour pour l'utilisateur {user_id}",
+            "tool_name": request.tool_name,
+            "permissions": {
+                "can_read": request.can_read,
+                "can_write": request.can_write,
+                "can_execute": request.can_execute
+            }
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur mise à jour permissions: {e}")
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=500)
+
+@app.put("/permissions/user/{user_id}/bulk")
+async def update_user_permissions_bulk(
+    user_id: int,
+    request: BulkUserPermissionUpdate,
+    current_user: UserResponse = Depends(get_current_admin_user)
+):
+    """Met à jour plusieurs permissions d'un utilisateur en une fois (admin uniquement)"""
+    try:
+        permissions_manager = PermissionsManager()
+        
+        # Préparer les données pour la mise à jour en lot
+        permissions_data = []
+        for perm in request.permissions:
+            permissions_data.append({
+                'tool_name': perm.tool_name,
+                'can_read': perm.can_read,
+                'can_write': perm.can_write,
+                'can_execute': perm.can_execute
+            })
+        
+        # Effectuer la mise à jour en lot
+        results = await permissions_manager.bulk_update_user_permissions(
+            user_id=user_id,
+            permissions_data=permissions_data
+        )
+        
+        return JSONResponse({
+            "status": "success",
+            "message": f"Permissions mises à jour en lot pour l'utilisateur {user_id}",
+            "updated_count": len(results),
+            "results": results
+        })
+        
+    except Exception as e:
+        logger.error(f"Erreur mise à jour permissions bulk: {e}")
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=500)
+
+@app.delete("/permissions/user/{user_id}/tool/{tool_name}")
+async def delete_user_permission(
+    user_id: int,
+    tool_name: str,
+    current_user: UserResponse = Depends(get_current_admin_user)
+):
+    """Supprime les permissions d'un utilisateur pour un outil spécifique (admin uniquement)"""
+    try:
+        permissions_manager = PermissionsManager()
+        
+        # Supprimer les permissions (revient aux permissions par défaut)
+        success = await permissions_manager.remove_user_permission(
+            user_id=user_id,
+            tool_name=tool_name
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Aucune permission trouvée pour l'utilisateur {user_id} et l'outil {tool_name}"
+            )
+        
+        return JSONResponse({
+            "status": "success",
+            "message": f"Permissions supprimées pour l'utilisateur {user_id} et l'outil {tool_name}"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur suppression permission: {e}")
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=500)
+
+@app.get("/permissions/defaults")
+async def get_default_permissions(
+    current_user: UserResponse = Depends(get_current_admin_user)
+):
+    """Obtient toutes les permissions par défaut (admin uniquement)"""
+    try:
+        permissions_manager = PermissionsManager()
+        
+        # Obtenir les permissions par défaut
+        defaults = await permissions_manager.get_default_permissions()
+        
+        # Organiser par outil
+        tools_defaults = {}
+        for perm in defaults:
+            tools_defaults[perm.tool_name] = {
+                'can_read': perm.can_read,
+                'can_write': perm.can_write,
+                'can_execute': perm.can_execute
+            }
+        
+        return JSONResponse({
+            "status": "success",
+            "data": {
+                "total_tools": len(tools_defaults),
+                "tools": tools_defaults
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Erreur obtention permissions par défaut: {e}")
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=500)
+
+@app.put("/permissions/defaults")
+async def update_default_permission(
+    request: DefaultPermissionUpdate,
+    current_user: UserResponse = Depends(get_current_admin_user)
+):
+    """Met à jour les permissions par défaut pour un outil (admin uniquement)"""
+    try:
+        permissions_manager = PermissionsManager()
+        
+        # Mettre à jour les permissions par défaut
+        success = await permissions_manager.set_default_permission(
+            tool_name=request.tool_name,
+            can_read=request.can_read,
+            can_write=request.can_write,
+            can_execute=request.can_execute
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Impossible de mettre à jour les permissions par défaut"
+            )
+        
+        return JSONResponse({
+            "status": "success",
+            "message": f"Permissions par défaut mises à jour pour l'outil {request.tool_name}",
+            "tool_name": request.tool_name,
+            "default_permissions": {
+                "can_read": request.can_read,
+                "can_write": request.can_write,
+                "can_execute": request.can_execute
+            }
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur mise à jour permissions par défaut: {e}")
+        return JSONResponse({
+            "status": "error",
             "message": str(e)
         }, status_code=500)
 
