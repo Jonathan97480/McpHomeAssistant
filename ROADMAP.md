@@ -118,30 +118,38 @@ GET  /auth/sessions     # ✅ Sessions actives utilisateur
 
 ---
 
-### **PHASE 3.2 : CONFIGURATION HOME ASSISTANT** ⚙️ **EN COURS**
-**État : 🔄 En développement**
+### **PHASE 3.2 : CONFIGURATION HOME ASSISTANT** ✅ **TERMINÉ**
+**État : ✅ Complété**
 
-#### 🎯 **Milestone 3.2 : Gestion configuration HA par utilisateur**
-- [ ] **Config Database** : Table user_configs (user_id, ha_url, ha_token_encrypted, domains_allowed)
-- [ ] **Token Encryption** : Chiffrement AES-256 des tokens HA
-- [ ] **Connection Testing** : Test connexion HA en temps réel
-- [ ] **Domain Validation** : Validation URL et domaines autorisés
-- [ ] **Multi-Instance Support** : Support plusieurs instances HA par utilisateur
+#### ✅ **Milestone 3.2 : Gestion configuration HA par utilisateur**
+- [x] **Config Database** : Table ha_configs (user_id, url, token_encrypted, last_test, last_status)
+- [x] **System Config** : Table system_config pour clés de chiffrement système
+- [x] **Token Encryption** : Chiffrement AES-256 Fernet + PBKDF2-HMAC-SHA256 (100k itérations)
+- [x] **Connection Testing** : Test connexion HA temps réel avec métriques détaillées
+- [x] **URL Validation** : Validation URLs HA avec recommandations HTTPS
+- [x] **Multi-Instance Support** : Support plusieurs configurations HA par utilisateur
+- [x] **Security Features** : Gestion erreurs, timeouts, validation stricte tokens
 
-#### 🎯 **Endpoints de configuration**
+#### ✅ **Endpoints de configuration complets**
 ```http
-POST /config/homeassistant    # Configuration HA utilisateur
-GET  /config/homeassistant    # Récupération config HA
-PUT  /config/homeassistant    # Mise à jour config HA
-POST /config/test-connection  # Test connexion HA
-DELETE /config/homeassistant  # Suppression config HA
+POST /config/homeassistant         # ✅ Configuration HA utilisateur  
+GET  /config/homeassistant         # ✅ Lister configurations utilisateur
+GET  /config/homeassistant/{id}    # ✅ Récupérer configuration spécifique
+PUT  /config/homeassistant/{id}    # ✅ Mise à jour configuration HA
+DELETE /config/homeassistant/{id}  # ✅ Suppression configuration HA  
+POST /config/homeassistant/{id}/test  # ✅ Test connexion configuration sauvée
+POST /config/homeassistant/test    # ✅ Test direct sans sauvegarde
 ```
 
-#### 🎯 **Interface Dashboard Config**
-- [ ] **Formulaire Token HA** : Saisie sécurisée du token
-- [ ] **Test Connexion Live** : Bouton test avec feedback temps réel
-- [ ] **Validation Domaines** : Interface sélection domaines autorisés
-- [ ] **Status Connection** : Indicateur état connexion HA
+#### ✅ **Fonctionnalités avancées**
+- [x] **Chiffrement sécurisé** : AES-256 avec clés uniques par installation
+- [x] **Validation complète** : URLs, tokens, timeouts, gestion erreurs HTTP
+- [x] **Tests en temps réel** : Mesure latence, version HA, nombre entités
+- [x] **Gestion multi-config** : Plusieurs instances HA par utilisateur avec statuts
+- [x] **Session management** : Nettoyage automatique sessions HTTP
+- [x] **Tests unitaires** : Suite complète de tests pour toutes les fonctionnalités
+
+**📦 Livré** : Module ha_config_manager.py complet avec chiffrement (commit 3ed986d)
 
 ---
 
