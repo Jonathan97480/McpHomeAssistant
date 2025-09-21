@@ -1,0 +1,440 @@
+<!-- Template pour la configuration -->
+<div class="config-management">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold">Configuration</h2>
+        <div class="flex gap-3">
+            <button class="btn btn-secondary" id="test-config">🧪 Tester</button>
+            <button class="btn btn-primary" id="save-config">💾 Enregistrer</button>
+        </div>
+    </div>
+    
+    <!-- Configuration Home Assistant -->
+    <div class="card mb-6">
+        <div class="card-header">
+            <h3 class="card-title">Home Assistant</h3>
+            <div class="flex items-center gap-2">
+                <div class="status-dot" id="ha-status"></div>
+                <span class="text-sm" id="ha-status-text">Chargement...</span>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="form-group">
+                    <label class="form-label required">URL Home Assistant</label>
+                    <input type="url" class="form-input" id="ha-url" 
+                           placeholder="http://homeassistant.local:8123" required>
+                    <p class="form-help">URL complète de votre instance Home Assistant</p>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label required">Token d'accès</label>
+                    <div class="input-group">
+                        <input type="password" class="form-input" id="ha-token" 
+                               placeholder="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." required>
+                        <button class="btn btn-secondary" id="toggle-token" type="button">👁️</button>
+                    </div>
+                    <p class="form-help">
+                        Token d'accès long terme généré dans Home Assistant
+                        <a href="#" class="text-primary" id="token-help">Comment obtenir ?</a>
+                    </p>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <div class="form-group">
+                    <label class="form-label">Timeout (secondes)</label>
+                    <input type="number" class="form-input" id="ha-timeout" 
+                           value="10" min="5" max="60">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Retry attempts</label>
+                    <input type="number" class="form-input" id="ha-retries" 
+                           value="3" min="1" max="10">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">SSL Verify</label>
+                    <select class="form-input" id="ha-ssl-verify">
+                        <option value="true">Activé</option>
+                        <option value="false">Désactivé</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Configuration serveur MCP -->
+    <div class="card mb-6">
+        <div class="card-header">
+            <h3 class="card-title">Serveur MCP</h3>
+        </div>
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="form-group">
+                    <label class="form-label">Port d'écoute</label>
+                    <input type="number" class="form-input" id="server-port" 
+                           value="8080" min="1024" max="65535">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Host</label>
+                    <input type="text" class="form-input" id="server-host" 
+                           value="0.0.0.0" placeholder="0.0.0.0">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Max sessions</label>
+                    <input type="number" class="form-input" id="max-sessions" 
+                           value="10" min="1" max="100">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Session timeout (minutes)</label>
+                    <input type="number" class="form-input" id="session-timeout" 
+                           value="30" min="5" max="480">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Configuration base de données -->
+    <div class="card mb-6">
+        <div class="card-header">
+            <h3 class="card-title">Base de données</h3>
+        </div>
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="form-group">
+                    <label class="form-label">Fichier base de données</label>
+                    <input type="text" class="form-input" id="db-file" 
+                           value="bridge_data.db" readonly>
+                    <p class="form-help">Chemin vers le fichier SQLite</p>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Retention logs (jours)</label>
+                    <input type="number" class="form-input" id="log-retention" 
+                           value="30" min="1" max="365">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Auto-cleanup</label>
+                    <select class="form-input" id="auto-cleanup">
+                        <option value="true">Activé</option>
+                        <option value="false">Désactivé</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Backup automatique</label>
+                    <select class="form-input" id="auto-backup">
+                        <option value="true">Activé</option>
+                        <option value="false">Désactivé</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Configuration cache -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Cache et performances</h3>
+        </div>
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Cache TTL (secondes)</label>
+                    <input type="number" class="form-input" id="cache-ttl" 
+                           value="300" min="60" max="3600">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Max cache entries</label>
+                    <input type="number" class="form-input" id="cache-max-entries" 
+                           value="1000" min="100" max="10000">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Circuit breaker threshold</label>
+                    <input type="number" class="form-input" id="circuit-threshold" 
+                           value="5" min="3" max="20">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal d'aide pour le token -->
+<div id="token-help-modal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">Comment obtenir un token Home Assistant</h3>
+            <button class="modal-close" id="close-token-help">✕</button>
+        </div>
+        <div class="modal-body">
+            <ol class="list-decimal list-inside space-y-2 text-sm">
+                <li>Connectez-vous à votre interface Home Assistant</li>
+                <li>Cliquez sur votre profil utilisateur (en bas à gauche)</li>
+                <li>Descendez jusqu'à la section "Tokens d'accès long terme"</li>
+                <li>Cliquez sur "Créer un token"</li>
+                <li>Donnez un nom au token (ex: "MCP Bridge")</li>
+                <li>Copiez le token généré et collez-le dans le champ ci-dessus</li>
+            </ol>
+            <div class="mt-4 p-3 bg-yellow-50 border-l-4 border-yellow-400">
+                <p class="text-sm text-yellow-700">
+                    ⚠️ Attention : Ce token donne un accès complet à votre Home Assistant. 
+                    Gardez-le secret et sécurisé.
+                </p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" id="token-help-ok">Compris</button>
+        </div>
+    </div>
+</div>
+
+<script>
+class ConfigManager {
+    constructor() {
+        this.init();
+    }
+    
+    init() {
+        this.loadConfiguration();
+        this.setupEventListeners();
+        this.checkHAStatus();
+    }
+    
+    setupEventListeners() {
+        // Boutons principaux
+        document.getElementById('test-config').addEventListener('click', () => {
+            this.testConfiguration();
+        });
+        
+        document.getElementById('save-config').addEventListener('click', () => {
+            this.saveConfiguration();
+        });
+        
+        // Toggle password
+        document.getElementById('toggle-token').addEventListener('click', () => {
+            this.toggleTokenVisibility();
+        });
+        
+        // Aide token
+        document.getElementById('token-help').addEventListener('click', (e) => {
+            e.preventDefault();
+            this.showTokenHelp();
+        });
+        
+        document.getElementById('close-token-help').addEventListener('click', () => {
+            this.hideTokenHelp();
+        });
+        
+        document.getElementById('token-help-ok').addEventListener('click', () => {
+            this.hideTokenHelp();
+        });
+        
+        // Validation en temps réel
+        document.getElementById('ha-url').addEventListener('input', () => {
+            this.validateHAUrl();
+        });
+    }
+    
+    async loadConfiguration() {
+        try {
+            const response = await fetch('/api/config');
+            const config = await response.json();
+            
+            // Configuration Home Assistant
+            if (config.homeassistant) {
+                document.getElementById('ha-url').value = config.homeassistant.url || '';
+                document.getElementById('ha-token').value = config.homeassistant.token || '';
+                document.getElementById('ha-timeout').value = config.homeassistant.timeout || 10;
+                document.getElementById('ha-retries').value = config.homeassistant.retries || 3;
+                document.getElementById('ha-ssl-verify').value = config.homeassistant.ssl_verify ? 'true' : 'false';
+            }
+            
+            // Configuration serveur
+            if (config.server) {
+                document.getElementById('server-port').value = config.server.port || 8080;
+                document.getElementById('server-host').value = config.server.host || '0.0.0.0';
+                document.getElementById('max-sessions').value = config.server.max_sessions || 10;
+                document.getElementById('session-timeout').value = config.server.session_timeout || 30;
+            }
+            
+            // Configuration base de données
+            if (config.database) {
+                document.getElementById('db-file').value = config.database.file || 'bridge_data.db';
+                document.getElementById('log-retention').value = config.database.log_retention || 30;
+                document.getElementById('auto-cleanup').value = config.database.auto_cleanup ? 'true' : 'false';
+                document.getElementById('auto-backup').value = config.database.auto_backup ? 'true' : 'false';
+            }
+            
+            // Configuration cache
+            if (config.cache) {
+                document.getElementById('cache-ttl').value = config.cache.ttl || 300;
+                document.getElementById('cache-max-entries').value = config.cache.max_entries || 1000;
+                document.getElementById('circuit-threshold').value = config.cache.circuit_threshold || 5;
+            }
+            
+        } catch (error) {
+            console.error('Erreur chargement configuration:', error);
+            window.showToast('Erreur lors du chargement de la configuration', 'error');
+        }
+    }
+    
+    async saveConfiguration() {
+        try {
+            const config = {
+                homeassistant: {
+                    url: document.getElementById('ha-url').value,
+                    token: document.getElementById('ha-token').value,
+                    timeout: parseInt(document.getElementById('ha-timeout').value),
+                    retries: parseInt(document.getElementById('ha-retries').value),
+                    ssl_verify: document.getElementById('ha-ssl-verify').value === 'true'
+                },
+                server: {
+                    port: parseInt(document.getElementById('server-port').value),
+                    host: document.getElementById('server-host').value,
+                    max_sessions: parseInt(document.getElementById('max-sessions').value),
+                    session_timeout: parseInt(document.getElementById('session-timeout').value)
+                },
+                database: {
+                    file: document.getElementById('db-file').value,
+                    log_retention: parseInt(document.getElementById('log-retention').value),
+                    auto_cleanup: document.getElementById('auto-cleanup').value === 'true',
+                    auto_backup: document.getElementById('auto-backup').value === 'true'
+                },
+                cache: {
+                    ttl: parseInt(document.getElementById('cache-ttl').value),
+                    max_entries: parseInt(document.getElementById('cache-max-entries').value),
+                    circuit_threshold: parseInt(document.getElementById('circuit-threshold').value)
+                }
+            };
+            
+            const response = await fetch('/api/config', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(config)
+            });
+            
+            if (response.ok) {
+                window.showToast('Configuration sauvegardée avec succès', 'success');
+                this.checkHAStatus();
+            } else {
+                const error = await response.json();
+                window.showToast(`Erreur: ${error.detail || 'Erreur inconnue'}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('Erreur sauvegarde configuration:', error);
+            window.showToast('Erreur lors de la sauvegarde', 'error');
+        }
+    }
+    
+    async testConfiguration() {
+        try {
+            const url = document.getElementById('ha-url').value;
+            const token = document.getElementById('ha-token').value;
+            
+            if (!url || !token) {
+                window.showToast('Veuillez remplir l\'URL et le token Home Assistant', 'warning');
+                return;
+            }
+            
+            const response = await fetch('/api/config/test-homeassistant', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    url: url,
+                    token: token
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                window.showToast('Connexion Home Assistant réussie !', 'success');
+                this.updateHAStatus(true, result.message);
+            } else {
+                window.showToast(`Test échoué: ${result.message}`, 'error');
+                this.updateHAStatus(false, result.message);
+            }
+            
+        } catch (error) {
+            console.error('Erreur test configuration:', error);
+            window.showToast('Erreur lors du test de connexion', 'error');
+            this.updateHAStatus(false, 'Erreur de connexion');
+        }
+    }
+    
+    async checkHAStatus() {
+        try {
+            const response = await fetch('/api/config/homeassistant-status');
+            const status = await response.json();
+            
+            this.updateHAStatus(status.connected, status.message);
+            
+        } catch (error) {
+            console.error('Erreur vérification statut HA:', error);
+            this.updateHAStatus(false, 'Statut inconnu');
+        }
+    }
+    
+    updateHAStatus(connected, message) {
+        const statusDot = document.getElementById('ha-status');
+        const statusText = document.getElementById('ha-status-text');
+        
+        if (connected) {
+            statusDot.className = 'status-dot status-online';
+            statusText.textContent = message || 'Connecté';
+            statusText.className = 'text-sm text-green-600';
+        } else {
+            statusDot.className = 'status-dot status-error';
+            statusText.textContent = message || 'Déconnecté';
+            statusText.className = 'text-sm text-red-600';
+        }
+    }
+    
+    toggleTokenVisibility() {
+        const tokenInput = document.getElementById('ha-token');
+        const toggleBtn = document.getElementById('toggle-token');
+        
+        if (tokenInput.type === 'password') {
+            tokenInput.type = 'text';
+            toggleBtn.textContent = '🙈';
+        } else {
+            tokenInput.type = 'password';
+            toggleBtn.textContent = '👁️';
+        }
+    }
+    
+    showTokenHelp() {
+        document.getElementById('token-help-modal').classList.remove('hidden');
+    }
+    
+    hideTokenHelp() {
+        document.getElementById('token-help-modal').classList.add('hidden');
+    }
+    
+    validateHAUrl() {
+        const urlInput = document.getElementById('ha-url');
+        const url = urlInput.value;
+        
+        if (url && !url.match(/^https?:\/\/.+/)) {
+            urlInput.classList.add('border-red-500');
+        } else {
+            urlInput.classList.remove('border-red-500');
+        }
+    }
+}
+
+// Initialiser le gestionnaire de configuration
+const configManager = new ConfigManager();
+</script>

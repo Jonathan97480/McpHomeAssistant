@@ -1,0 +1,477 @@
+<!-- Template pour les outils MCP -->
+<div class="tools-management">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold">Outils MCP</h2>
+        <div class="flex gap-3">
+            <button class="btn btn-secondary" id="refresh-tools">🔄 Actualiser</button>
+            <button class="btn btn-primary" id="test-all-tools">🧪 Tester tout</button>
+        </div>
+    </div>
+    
+    <!-- Statistiques rapides -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-3xl mb-2">🔧</div>
+                <div class="text-2xl font-bold" id="total-tools-count">0</div>
+                <div class="text-sm text-secondary">Outils total</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-3xl mb-2">✅</div>
+                <div class="text-2xl font-bold text-green-600" id="active-tools-count">0</div>
+                <div class="text-sm text-secondary">Actifs</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-3xl mb-2">📊</div>
+                <div class="text-2xl font-bold" id="total-usage-count">0</div>
+                <div class="text-sm text-secondary">Utilisations</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-3xl mb-2">⚡</div>
+                <div class="text-2xl font-bold" id="avg-response-time">0ms</div>
+                <div class="text-sm text-secondary">Temps moyen</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filtres et recherche -->
+    <div class="card mb-6">
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Recherche</label>
+                    <input type="text" class="form-input" id="search-tools" 
+                           placeholder="Rechercher un outil...">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Catégorie</label>
+                    <select class="form-input" id="filter-category">
+                        <option value="">Toutes les catégories</option>
+                        <option value="homeassistant">Home Assistant</option>
+                        <option value="general">Général</option>
+                        <option value="automation">Automation</option>
+                        <option value="monitoring">Monitoring</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Statut</label>
+                    <select class="form-input" id="filter-status">
+                        <option value="">Tous les statuts</option>
+                        <option value="active">Actif</option>
+                        <option value="inactive">Inactif</option>
+                        <option value="error">Erreur</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-secondary w-full" id="clear-filters">Effacer filtres</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Liste des outils -->
+    <div id="tools-list">
+        <!-- Les outils seront chargés dynamiquement ici -->
+    </div>
+</div>
+
+<!-- Modal pour tester un outil -->
+<div id="test-tool-modal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title" id="test-modal-title">Tester l'outil</h3>
+            <button class="modal-close" id="close-test-modal">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">Paramètres (JSON)</label>
+                <textarea class="form-input" id="test-params" rows="6" 
+                          placeholder='{"param1": "value1", "param2": "value2"}'></textarea>
+                <p class="form-help">Saisissez les paramètres au format JSON</p>
+            </div>
+            
+            <div id="test-result" class="hidden">
+                <h4 class="font-semibold mb-2">Résultat :</h4>
+                <pre class="bg-gray-100 p-3 rounded text-sm overflow-auto max-h-64" id="test-result-content"></pre>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-test">Annuler</button>
+            <button class="btn btn-primary" id="execute-test">▶️ Exécuter</button>
+        </div>
+    </div>
+</div>
+
+<script>
+class ToolsManager {
+    constructor() {
+        this.tools = [];
+        this.filteredTools = [];
+        this.currentTool = null;
+        this.init();
+    }
+    
+    init() {
+        this.loadTools();
+        this.setupEventListeners();
+        this.setupFilters();
+    }
+    
+    setupEventListeners() {
+        // Boutons principaux
+        document.getElementById('refresh-tools').addEventListener('click', () => {
+            this.loadTools();
+        });
+        
+        document.getElementById('test-all-tools').addEventListener('click', () => {
+            this.testAllTools();
+        });
+        
+        // Modal de test
+        document.getElementById('close-test-modal').addEventListener('click', () => {
+            this.hideTestModal();
+        });
+        
+        document.getElementById('cancel-test').addEventListener('click', () => {
+            this.hideTestModal();
+        });
+        
+        document.getElementById('execute-test').addEventListener('click', () => {
+            this.executeToolTest();
+        });
+        
+        // Filtres
+        document.getElementById('clear-filters').addEventListener('click', () => {
+            this.clearFilters();
+        });
+    }
+    
+    setupFilters() {
+        const searchInput = document.getElementById('search-tools');
+        const categoryFilter = document.getElementById('filter-category');
+        const statusFilter = document.getElementById('filter-status');
+        
+        [searchInput, categoryFilter, statusFilter].forEach(element => {
+            element.addEventListener('input', () => {
+                this.applyFilters();
+            });
+        });
+    }
+    
+    async loadTools() {
+        try {
+            const response = await fetch('/api/tools');
+            this.tools = await response.json();
+            this.filteredTools = [...this.tools];
+            
+            this.updateStatistics();
+            this.renderTools();
+            
+        } catch (error) {
+            console.error('Erreur chargement outils:', error);
+            window.showToast('Erreur lors du chargement des outils', 'error');
+        }
+    }
+    
+    updateStatistics() {
+        const totalTools = this.tools.length;
+        const activeTools = this.tools.filter(tool => tool.status === 'active').length;
+        const totalUsage = this.tools.reduce((sum, tool) => sum + (tool.usage_count || 0), 0);
+        const avgResponseTime = this.tools.length > 0 
+            ? Math.round(this.tools.reduce((sum, tool) => sum + (tool.avg_response_time || 0), 0) / this.tools.length)
+            : 0;
+        
+        document.getElementById('total-tools-count').textContent = totalTools;
+        document.getElementById('active-tools-count').textContent = activeTools;
+        document.getElementById('total-usage-count').textContent = totalUsage;
+        document.getElementById('avg-response-time').textContent = `${avgResponseTime}ms`;
+    }
+    
+    renderTools() {
+        const container = document.getElementById('tools-list');
+        container.innerHTML = '';
+        
+        if (this.filteredTools.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-8">
+                    <div class="text-6xl mb-4">🔧</div>
+                    <h3 class="text-xl font-semibold mb-2">Aucun outil trouvé</h3>
+                    <p class="text-secondary">Aucun outil MCP ne correspond aux critères de recherche.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        this.filteredTools.forEach(tool => {
+            const toolCard = this.createToolCard(tool);
+            container.appendChild(toolCard);
+        });
+    }
+    
+    createToolCard(tool) {
+        const card = document.createElement('div');
+        card.className = 'card mb-4';
+        
+        const statusClass = this.getStatusClass(tool.status);
+        const statusIcon = this.getStatusIcon(tool.status);
+        
+        card.innerHTML = `
+            <div class="card-body">
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="text-2xl">${tool.icon || '🔧'}</div>
+                        <div>
+                            <h4 class="font-semibold text-lg">${tool.name}</h4>
+                            <p class="text-sm text-secondary">${tool.description || 'Aucune description'}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="badge ${statusClass}">${statusIcon} ${tool.status || 'unknown'}</span>
+                        <button class="btn btn-secondary btn-sm" onclick="toolsManager.showToolDetails('${tool.name}')">
+                            👁️ Détails
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="toolsManager.showTestModal('${tool.name}')">
+                            🧪 Tester
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                        <span class="text-secondary">Catégorie:</span>
+                        <div class="font-medium">${tool.category || 'Général'}</div>
+                    </div>
+                    <div>
+                        <span class="text-secondary">Utilisations:</span>
+                        <div class="font-medium">${tool.usage_count || 0}</div>
+                    </div>
+                    <div>
+                        <span class="text-secondary">Temps moyen:</span>
+                        <div class="font-medium">${tool.avg_response_time || 0}ms</div>
+                    </div>
+                    <div>
+                        <span class="text-secondary">Dernière utilisation:</span>
+                        <div class="font-medium">${tool.last_used ? this.formatDate(tool.last_used) : 'Jamais'}</div>
+                    </div>
+                </div>
+                
+                ${tool.parameters && tool.parameters.length > 0 ? `
+                <div class="mt-3">
+                    <details class="text-sm">
+                        <summary class="cursor-pointer font-medium">Paramètres (${tool.parameters.length})</summary>
+                        <div class="mt-2 space-y-1">
+                            ${tool.parameters.map(param => `
+                                <div class="flex items-center gap-2">
+                                    <code class="text-xs bg-gray-100 px-1 rounded">${param.name}</code>
+                                    <span class="text-secondary">${param.type}</span>
+                                    ${param.required ? '<span class="badge badge-warning">Requis</span>' : ''}
+                                    ${param.description ? `<span class="text-xs text-secondary">- ${param.description}</span>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </details>
+                </div>
+                ` : ''}
+            </div>
+        `;
+        
+        return card;
+    }
+    
+    getStatusClass(status) {
+        const classes = {
+            active: 'badge-success',
+            inactive: 'badge-secondary',
+            error: 'badge-danger',
+            unknown: 'badge-warning'
+        };
+        return classes[status] || 'badge-secondary';
+    }
+    
+    getStatusIcon(status) {
+        const icons = {
+            active: '✅',
+            inactive: '⏸️',
+            error: '❌',
+            unknown: '❓'
+        };
+        return icons[status] || '❓';
+    }
+    
+    applyFilters() {
+        const search = document.getElementById('search-tools').value.toLowerCase();
+        const category = document.getElementById('filter-category').value;
+        const status = document.getElementById('filter-status').value;
+        
+        this.filteredTools = this.tools.filter(tool => {
+            const matchesSearch = !search || 
+                tool.name.toLowerCase().includes(search) || 
+                (tool.description && tool.description.toLowerCase().includes(search));
+            
+            const matchesCategory = !category || tool.category === category;
+            const matchesStatus = !status || tool.status === status;
+            
+            return matchesSearch && matchesCategory && matchesStatus;
+        });
+        
+        this.renderTools();
+    }
+    
+    clearFilters() {
+        document.getElementById('search-tools').value = '';
+        document.getElementById('filter-category').value = '';
+        document.getElementById('filter-status').value = '';
+        this.applyFilters();
+    }
+    
+    showTestModal(toolName) {
+        const tool = this.tools.find(t => t.name === toolName);
+        if (!tool) return;
+        
+        this.currentTool = tool;
+        
+        document.getElementById('test-modal-title').textContent = `Tester ${tool.name}`;
+        
+        // Préremplir avec un exemple de paramètres
+        const exampleParams = {};
+        if (tool.parameters) {
+            tool.parameters.forEach(param => {
+                exampleParams[param.name] = param.example || 
+                    (param.type === 'string' ? 'example_value' : 
+                     param.type === 'number' ? 0 : 
+                     param.type === 'boolean' ? false : null);
+            });
+        }
+        
+        document.getElementById('test-params').value = JSON.stringify(exampleParams, null, 2);
+        document.getElementById('test-result').classList.add('hidden');
+        
+        document.getElementById('test-tool-modal').classList.remove('hidden');
+    }
+    
+    hideTestModal() {
+        document.getElementById('test-tool-modal').classList.add('hidden');
+        this.currentTool = null;
+    }
+    
+    async executeToolTest() {
+        if (!this.currentTool) return;
+        
+        try {
+            const paramsText = document.getElementById('test-params').value;
+            let params = {};
+            
+            if (paramsText.trim()) {
+                params = JSON.parse(paramsText);
+            }
+            
+            const response = await fetch('/api/tools/test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    tool_name: this.currentTool.name,
+                    parameters: params
+                })
+            });
+            
+            const result = await response.json();
+            
+            document.getElementById('test-result-content').textContent = 
+                JSON.stringify(result, null, 2);
+            document.getElementById('test-result').classList.remove('hidden');
+            
+            if (response.ok) {
+                window.showToast('Test exécuté avec succès', 'success');
+            } else {
+                window.showToast('Erreur lors du test', 'error');
+            }
+            
+        } catch (error) {
+            console.error('Erreur test outil:', error);
+            window.showToast('Erreur lors de l\'exécution du test', 'error');
+            
+            document.getElementById('test-result-content').textContent = 
+                `Erreur: ${error.message}`;
+            document.getElementById('test-result').classList.remove('hidden');
+        }
+    }
+    
+    async testAllTools() {
+        window.showToast('Test de tous les outils en cours...', 'info', 5000);
+        
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (const tool of this.tools) {
+            try {
+                const response = await fetch('/api/tools/health-check', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        tool_name: tool.name
+                    })
+                });
+                
+                if (response.ok) {
+                    successCount++;
+                } else {
+                    errorCount++;
+                }
+                
+            } catch (error) {
+                errorCount++;
+            }
+        }
+        
+        window.showToast(
+            `Test terminé: ${successCount} succès, ${errorCount} erreurs`, 
+            errorCount > 0 ? 'warning' : 'success'
+        );
+        
+        // Recharger les outils pour mettre à jour les statuts
+        this.loadTools();
+    }
+    
+    showToolDetails(toolName) {
+        const tool = this.tools.find(t => t.name === toolName);
+        if (!tool) return;
+        
+        // Pour l'instant, on affiche les détails dans une notification
+        // TODO: Créer un modal dédié pour les détails
+        console.log('Détails de l\'outil:', tool);
+        window.showToast(`Détails de ${tool.name} - voir console pour plus d'infos`, 'info');
+    }
+    
+    formatDate(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diff = now - date;
+        
+        if (diff < 60000) return 'À l\'instant';
+        if (diff < 3600000) return `Il y a ${Math.floor(diff / 60000)} min`;
+        if (diff < 86400000) return `Il y a ${Math.floor(diff / 3600000)} h`;
+        
+        return date.toLocaleDateString('fr-FR');
+    }
+}
+
+// Initialiser le gestionnaire d'outils
+const toolsManager = new ToolsManager();
+</script>

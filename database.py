@@ -487,6 +487,40 @@ class DatabaseManager:
             logging.error(f"❌ Erreur import logs: {e}")
             return 0
     
+    async def count_requests_since(self, since_time: datetime) -> int:
+        """Compte le nombre de requêtes depuis une date donnée"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) as count 
+                FROM requests 
+                WHERE timestamp >= ?
+            """, (since_time.isoformat(),))
+            
+            result = cursor.fetchone()
+            return result[0] if result else 0
+            
+        except Exception as e:
+            logging.error(f"Erreur comptage requêtes depuis {since_time}: {e}")
+            return 0
+    
+    async def count_requests_between(self, start_time: datetime, end_time: datetime) -> int:
+        """Compte le nombre de requêtes entre deux dates"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) as count 
+                FROM requests 
+                WHERE timestamp >= ? AND timestamp < ?
+            """, (start_time.isoformat(), end_time.isoformat()))
+            
+            result = cursor.fetchone()
+            return result[0] if result else 0
+            
+        except Exception as e:
+            logging.error(f"Erreur comptage requêtes entre {start_time} et {end_time}: {e}")
+            return 0
+
     async def close(self):
         """Ferme la connexion à la base de données"""
         if self.connection:

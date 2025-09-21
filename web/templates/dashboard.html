@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - HTTP-MCP Bridge</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <a href="/dashboard" class="logo">
+                    <div class="logo-icon">🌉</div>
+                    <span class="logo-text">MCP Bridge</span>
+                </a>
+            </div>
+            
+            <div class="nav-menu">
+                <div class="nav-item">
+                    <a href="/dashboard" class="nav-link">
+                        <span class="nav-icon">📊</span>
+                        <span class="nav-text">Tableau de bord</span>
+                    </a>
+                </div>
+                
+                <div class="nav-item">
+                    <a href="/permissions" class="nav-link">
+                        <span class="nav-icon">🔐</span>
+                        <span class="nav-text">Permissions</span>
+                    </a>
+                </div>
+                
+                <div class="nav-item">
+                    <a href="/config" class="nav-link">
+                        <span class="nav-icon">⚙️</span>
+                        <span class="nav-text">Configuration</span>
+                    </a>
+                </div>
+                
+                <div class="nav-item">
+                    <a href="/tools" class="nav-link">
+                        <span class="nav-icon">🔧</span>
+                        <span class="nav-text">Outils MCP</span>
+                    </a>
+                </div>
+                
+                <div class="nav-item">
+                    <a href="/logs" class="nav-link">
+                        <span class="nav-icon">📝</span>
+                        <span class="nav-text">Logs</span>
+                    </a>
+                </div>
+                
+                <!-- Navigation admin (visible seulement pour les admins) -->
+                <div class="nav-item admin-only" style="display: none;">
+                    <a href="/admin" class="nav-link">
+                        <span class="nav-icon">👑</span>
+                        <span class="nav-text">Administration</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Contenu principal -->
+        <div class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-content">
+                    <div class="flex items-center gap-3">
+                        <button id="sidebar-toggle" class="btn btn-secondary btn-sm md:hidden">
+                            ☰
+                        </button>
+                        <h1 class="header-title" id="page-title">Tableau de bord</h1>
+                    </div>
+                    
+                    <div class="header-actions">
+                        <!-- Statut de connexion -->
+                        <div class="flex items-center gap-2">
+                            <div class="status-dot status-online" id="connection-status"></div>
+                            <span class="text-sm" id="connection-text">En ligne</span>
+                        </div>
+                        
+                        <!-- Menu utilisateur -->
+                        <div class="user-menu" id="user-menu">
+                            <div class="user-avatar" id="user-avatar">?</div>
+                            <div class="user-info">
+                                <div class="text-sm font-medium" id="user-name">Utilisateur</div>
+                                <div class="text-xs text-secondary" id="user-role">user</div>
+                            </div>
+                            <span class="text-xs">▼</span>
+                        </div>
+                        
+                        <!-- Dropdown menu utilisateur -->
+                        <div class="user-dropdown hidden absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg min-w-48">
+                            <a href="/profile" class="block px-4 py-2 text-sm hover:bg-gray-50">
+                                👤 Mon profil
+                            </a>
+                            <a href="/settings" class="block px-4 py-2 text-sm hover:bg-gray-50">
+                                ⚙️ Paramètres
+                            </a>
+                            <hr class="my-1">
+                            <button id="logout-btn" class="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 text-red-600">
+                                🚪 Déconnexion
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            
+            <!-- Zone de contenu dynamique -->
+            <main class="content">
+                <div id="main-content">
+                    <!-- Le contenu sera chargé dynamiquement ici -->
+                    <div class="text-center">
+                        <div class="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-3"></div>
+                        <p>Chargement du tableau de bord...</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- Notifications toast -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+    
+    <!-- Modal overlay -->
+    <div id="modal-overlay" class="fixed inset-0 bg-overlay hidden z-40"></div>
+    
+    <!-- Loader global -->
+    <div id="loader" class="fixed inset-0 bg-overlay flex items-center justify-center hidden z-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg">
+            <div class="flex items-center gap-3">
+                <div class="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full"></div>
+                <span>Chargement...</span>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialiser les infos utilisateur dans l'interface
+            const user = JSON.parse(localStorage.getItem('mcp_user') || '{}');
+            
+            if (user.username) {
+                document.getElementById('user-name').textContent = user.full_name || user.username;
+                document.getElementById('user-role').textContent = user.role || 'user';
+                document.getElementById('user-avatar').textContent = (user.full_name || user.username).charAt(0).toUpperCase();
+                
+                // Afficher le menu admin si l'utilisateur est admin
+                if (user.role === 'admin') {
+                    document.querySelector('.admin-only').style.display = 'block';
+                }
+            }
+            
+            // Toggle menu utilisateur
+            const userMenu = document.getElementById('user-menu');
+            const userDropdown = document.querySelector('.user-dropdown');
+            
+            userMenu.addEventListener('click', (e) => {
+                e.stopPropagation();
+                userDropdown.classList.toggle('hidden');
+            });
+            
+            // Fermer le dropdown en cliquant ailleurs
+            document.addEventListener('click', () => {
+                userDropdown.classList.add('hidden');
+            });
+            
+            // Gestion responsive sidebar
+            const sidebar = document.querySelector('.sidebar');
+            const sidebarToggle = document.getElementById('sidebar-toggle');
+            
+            sidebarToggle.addEventListener('click', () => {
+                sidebar.classList.toggle('open');
+            });
+            
+            // Fermer sidebar sur mobile quand on clique sur un lien
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth < 768) {
+                        sidebar.classList.remove('open');
+                    }
+                });
+            });
+        });
+    </script>
+    
+    <style>
+        .space-y-2 > * + * {
+            margin-top: 0.5rem;
+        }
+        
+        .min-w-48 {
+            min-width: 12rem;
+        }
+        
+        .user-dropdown {
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 0.25rem;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow-lg);
+            min-width: 12rem;
+            z-index: 1000;
+        }
+        
+        .user-menu {
+            position: relative;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .sidebar.open {
+                transform: translateX(0);
+            }
+        }
+        
+        /* Animations supplémentaires */
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .w-8 { width: 2rem; }
+        .h-8 { height: 2rem; }
+        .w-5 { width: 1.25rem; }
+        .h-5 { width: 1.25rem; }
+        
+        .fixed { position: fixed; }
+        .absolute { position: absolute; }
+        .relative { position: relative; }
+        .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+        .top-4 { top: 1rem; }
+        .right-4 { right: 1rem; }
+        .top-full { top: 100%; }
+        .right-0 { right: 0; }
+        .mt-1 { margin-top: 0.25rem; }
+        .mb-3 { margin-bottom: 0.75rem; }
+        .mx-auto { margin-left: auto; margin-right: auto; }
+        .z-40 { z-index: 40; }
+        .z-50 { z-index: 50; }
+        .z-1000 { z-index: 1000; }
+        
+        .gap-3 { gap: 0.75rem; }
+        .gap-2 { gap: 0.5rem; }
+        
+        .text-xs { font-size: 0.75rem; }
+        .text-red-600 { color: #dc2626; }
+        
+        .md\:hidden {
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .md\:hidden {
+                display: block;
+            }
+        }
+    </style>
+</body>
+</html>

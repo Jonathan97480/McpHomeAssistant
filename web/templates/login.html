@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion - HTTP-MCP Bridge</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+    <div class="min-h-screen flex items-center justify-center bg-secondary">
+        <div class="card w-full max-w-md">
+            <div class="card-header text-center">
+                <div class="logo-icon mx-auto mb-3">
+                    🌉
+                </div>
+                <h2 class="card-title text-xl">HTTP-MCP Bridge</h2>
+                <p class="card-subtitle">Connectez-vous à votre dashboard</p>
+            </div>
+            
+            <div class="card-content">
+                <form id="login-form" class="space-y-4">
+                    <div class="form-group">
+                        <label for="username" class="form-label">Nom d'utilisateur</label>
+                        <input 
+                            type="text" 
+                            id="username" 
+                            name="username" 
+                            class="form-input" 
+                            required 
+                            autocomplete="username"
+                            placeholder="Entrez votre nom d'utilisateur"
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password" class="form-label">Mot de passe</label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            class="form-input" 
+                            required 
+                            autocomplete="current-password"
+                            placeholder="Entrez votre mot de passe"
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" name="remember" class="form-checkbox">
+                            <span class="text-sm">Se souvenir de moi</span>
+                        </label>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-full">
+                        <span id="login-text">Se connecter</span>
+                        <span id="login-loading" class="hidden">Connexion...</span>
+                    </button>
+                </form>
+                
+                <div id="login-error" class="alert alert-error mt-3 hidden"></div>
+            </div>
+            
+            <div class="card-footer text-center">
+                <p class="text-sm text-secondary">
+                    Accès sécurisé au bridge MCP Home Assistant
+                </p>
+                <div class="mt-2">
+                    <span class="badge badge-info">v1.0.0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loader global -->
+    <div id="loader" class="fixed inset-0 bg-overlay flex items-center justify-center hidden z-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg">
+            <div class="flex items-center gap-3">
+                <div class="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full"></div>
+                <span>Chargement...</span>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        // Gestion spécifique de la page de login
+        document.addEventListener('DOMContentLoaded', () => {
+            // Rediriger si déjà connecté
+            const token = localStorage.getItem('mcp_token');
+            if (token && window.location.pathname === '/login') {
+                window.location.href = '/dashboard';
+                return;
+            }
+            
+            const form = document.getElementById('login-form');
+            const errorDiv = document.getElementById('login-error');
+            const loginText = document.getElementById('login-text');
+            const loginLoading = document.getElementById('login-loading');
+            
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                // UI Loading state
+                loginText.classList.add('hidden');
+                loginLoading.classList.remove('hidden');
+                errorDiv.classList.add('hidden');
+                
+                const formData = new FormData(form);
+                const credentials = {
+                    username: formData.get('username'),
+                    password: formData.get('password')
+                };
+                
+                try {
+                    const response = await fetch('/auth/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(credentials)
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        // Stocker le token et les infos utilisateur
+                        localStorage.setItem('mcp_token', data.access_token);
+                        localStorage.setItem('mcp_user', JSON.stringify(data.user || {}));
+                        
+                        // Rediriger vers le dashboard
+                        window.location.href = '/dashboard';
+                    } else {
+                        const error = await response.json();
+                        throw new Error(error.detail || 'Erreur de connexion');
+                    }
+                } catch (error) {
+                    console.error('Erreur login:', error);
+                    errorDiv.textContent = error.message || 'Erreur de connexion. Vérifiez vos identifiants.';
+                    errorDiv.classList.remove('hidden');
+                } finally {
+                    // Reset UI
+                    loginText.classList.remove('hidden');
+                    loginLoading.classList.add('hidden');
+                }
+            });
+            
+            // Focus automatique sur le champ username
+            document.getElementById('username').focus();
+        });
+    </script>
+    
+    <style>
+        .min-h-screen {
+            min-height: 100vh;
+        }
+        
+        .max-w-md {
+            max-width: 28rem;
+        }
+        
+        .space-y-4 > * + * {
+            margin-top: 1rem;
+        }
+        
+        .form-checkbox {
+            width: 1rem;
+            height: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+        }
+        
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        
+        .fixed {
+            position: fixed;
+        }
+        
+        .inset-0 {
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+        }
+        
+        .z-50 {
+            z-index: 50;
+        }
+    </style>
+</body>
+</html>

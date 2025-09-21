@@ -1,0 +1,282 @@
+<!-- Template pour la page principale du dashboard -->
+<div class="dashboard-overview">
+    <!-- Métriques principales -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="card">
+            <div class="card-body">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-secondary text-sm">Connexions actives</p>
+                        <p class="text-2xl font-bold" id="active-connections">0</p>
+                    </div>
+                    <div class="text-primary text-3xl">🌐</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-secondary text-sm">Outils MCP</p>
+                        <p class="text-2xl font-bold" id="total-tools">0</p>
+                    </div>
+                    <div class="text-primary text-3xl">🔧</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-secondary text-sm">Requêtes/h</p>
+                        <p class="text-2xl font-bold" id="requests-per-hour">0</p>
+                    </div>
+                    <div class="text-primary text-3xl">📊</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-secondary text-sm">Uptime</p>
+                        <p class="text-2xl font-bold" id="uptime">--</p>
+                    </div>
+                    <div class="text-primary text-3xl">⏱️</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Graphiques et activité récente -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Graphique d'activité -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Activité des 24 dernières heures</h3>
+            </div>
+            <div class="card-body">
+                <div class="activity-chart">
+                    <canvas id="activity-chart" width="400" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Connexions récentes -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Connexions récentes</h3>
+            </div>
+            <div class="card-body">
+                <div class="recent-connections">
+                    <div id="connections-list" class="space-y-3">
+                        <!-- Les connexions seront ajoutées dynamiquement -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Outils MCP disponibles -->
+    <div class="card mt-6">
+        <div class="card-header">
+            <h3 class="card-title">Outils MCP disponibles</h3>
+            <button class="btn btn-primary btn-sm" id="refresh-tools">🔄 Actualiser</button>
+        </div>
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="tools-grid">
+                <!-- Les outils seront ajoutés dynamiquement -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+class DashboardOverview {
+    constructor() {
+        this.init();
+    }
+    
+    init() {
+        this.loadMetrics();
+        this.loadRecentConnections();
+        this.loadAvailableTools();
+        this.setupEventListeners();
+        
+        // Actualiser les métriques toutes les 30 secondes
+        setInterval(() => {
+            this.loadMetrics();
+            this.loadRecentConnections();
+        }, 30000);
+    }
+    
+    setupEventListeners() {
+        document.getElementById('refresh-tools').addEventListener('click', () => {
+            this.loadAvailableTools();
+        });
+    }
+    
+    async loadMetrics() {
+        try {
+            const response = await fetch('/api/metrics');
+            const metrics = await response.json();
+            
+            document.getElementById('active-connections').textContent = metrics.active_connections || 0;
+            document.getElementById('total-tools').textContent = metrics.total_tools || 0;
+            document.getElementById('requests-per-hour').textContent = metrics.requests_per_hour || 0;
+            document.getElementById('uptime').textContent = this.formatUptime(metrics.uptime || 0);
+            
+            this.updateActivityChart(metrics.activity_data);
+        } catch (error) {
+            console.error('Erreur lors du chargement des métriques:', error);
+        }
+    }
+    
+    async loadRecentConnections() {
+        try {
+            const response = await fetch('/api/connections/recent');
+            const connections = await response.json();
+            
+            const container = document.getElementById('connections-list');
+            container.innerHTML = '';
+            
+            if (connections.length === 0) {
+                container.innerHTML = '<p class="text-secondary">Aucune connexion récente</p>';
+                return;
+            }
+            
+            connections.forEach(conn => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="status-dot ${conn.active ? 'status-online' : 'status-offline'}"></div>
+                        <div>
+                            <p class="font-medium">${conn.client_ip}</p>
+                            <p class="text-sm text-secondary">${this.formatDate(conn.connected_at)}</p>
+                        </div>
+                    </div>
+                    <div class="text-sm text-secondary">
+                        ${conn.requests_count} requêtes
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        } catch (error) {
+            console.error('Erreur lors du chargement des connexions:', error);
+        }
+    }
+    
+    async loadAvailableTools() {
+        try {
+            const response = await fetch('/api/tools');
+            const tools = await response.json();
+            
+            const container = document.getElementById('tools-grid');
+            container.innerHTML = '';
+            
+            if (tools.length === 0) {
+                container.innerHTML = '<p class="text-secondary col-span-full">Aucun outil MCP disponible</p>';
+                return;
+            }
+            
+            tools.forEach(tool => {
+                const item = document.createElement('div');
+                item.className = 'card';
+                item.innerHTML = `
+                    <div class="card-body">
+                        <div class="flex items-start justify-between mb-2">
+                            <h4 class="font-semibold">${tool.name}</h4>
+                            <span class="badge ${tool.enabled ? 'badge-success' : 'badge-warning'}">
+                                ${tool.enabled ? 'Actif' : 'Inactif'}
+                            </span>
+                        </div>
+                        <p class="text-sm text-secondary mb-3">${tool.description || 'Aucune description'}</p>
+                        <div class="flex items-center justify-between text-xs text-secondary">
+                            <span>${tool.category || 'Général'}</span>
+                            <span>${tool.usage_count || 0} utilisations</span>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        } catch (error) {
+            console.error('Erreur lors du chargement des outils:', error);
+        }
+    }
+    
+    updateActivityChart(data) {
+        // Ici, on pourrait utiliser Chart.js ou une autre bibliothèque
+        // Pour l'instant, on crée un graphique simple
+        const canvas = document.getElementById('activity-chart');
+        const ctx = canvas.getContext('2d');
+        
+        // Nettoyer le canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        if (!data || data.length === 0) {
+            ctx.fillStyle = '#6b7280';
+            ctx.font = '14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Aucune donnée disponible', canvas.width / 2, canvas.height / 2);
+            return;
+        }
+        
+        // Dessiner un graphique en barres simple
+        const maxValue = Math.max(...data.map(d => d.requests));
+        const barWidth = canvas.width / data.length;
+        
+        data.forEach((point, index) => {
+            const barHeight = (point.requests / maxValue) * (canvas.height - 40);
+            const x = index * barWidth;
+            const y = canvas.height - barHeight - 20;
+            
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillRect(x + 2, y, barWidth - 4, barHeight);
+            
+            // Étiquette de l'heure
+            ctx.fillStyle = '#6b7280';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(point.hour, x + barWidth / 2, canvas.height - 5);
+        });
+    }
+    
+    formatUptime(seconds) {
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        
+        if (days > 0) return `${days}j ${hours}h`;
+        if (hours > 0) return `${hours}h ${minutes}m`;
+        return `${minutes}m`;
+    }
+    
+    formatDate(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diff = now - date;
+        
+        if (diff < 60000) return 'À l\'instant';
+        if (diff < 3600000) return `Il y a ${Math.floor(diff / 60000)} min`;
+        if (diff < 86400000) return `Il y a ${Math.floor(diff / 3600000)} h`;
+        
+        return date.toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+}
+
+// Initialiser le dashboard overview quand la page est chargée
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => new DashboardOverview());
+} else {
+    new DashboardOverview();
+}
+</script>

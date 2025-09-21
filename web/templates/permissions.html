@@ -1,0 +1,497 @@
+<!-- Template pour la gestion des permissions -->
+<div class="permissions-management">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold">Gestion des permissions</h2>
+        <div class="flex gap-3">
+            <button class="btn btn-secondary" id="export-permissions">📤 Exporter</button>
+            <button class="btn btn-primary" id="add-permission">➕ Nouvelle permission</button>
+        </div>
+    </div>
+    
+    <!-- Filtres -->
+    <div class="card mb-6">
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Utilisateur</label>
+                    <select class="form-input" id="filter-user">
+                        <option value="">Tous les utilisateurs</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Resource</label>
+                    <input type="text" class="form-input" id="filter-resource" placeholder="Filtrer par resource...">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Type</label>
+                    <select class="form-input" id="filter-type">
+                        <option value="">Tous les types</option>
+                        <option value="read">Lecture</option>
+                        <option value="write">Écriture</option>
+                        <option value="execute">Exécution</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-secondary w-full" id="clear-filters">🗑️ Effacer filtres</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tableau des permissions -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Permissions configurées</h3>
+            <div class="flex items-center gap-2">
+                <span class="text-sm text-secondary" id="permissions-count">0 permissions</span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Utilisateur</th>
+                            <th>Resource</th>
+                            <th>Permissions</th>
+                            <th>Accordé le</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="permissions-table-body">
+                        <!-- Les permissions seront ajoutées dynamiquement -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour ajouter/éditer une permission -->
+<div id="permission-modal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title" id="modal-title">Nouvelle permission</h3>
+            <button class="modal-close" id="close-modal">✕</button>
+        </div>
+        <div class="modal-body">
+            <form id="permission-form">
+                <input type="hidden" id="permission-id" value="">
+                
+                <div class="form-group">
+                    <label class="form-label required">Utilisateur</label>
+                    <select class="form-input" id="permission-user" required>
+                        <option value="">Sélectionner un utilisateur</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label required">Resource</label>
+                    <input type="text" class="form-input" id="permission-resource" 
+                           placeholder="ex: tools.*, config.database, etc." required>
+                    <p class="form-help">
+                        Utiliser * pour tous les éléments. Exemples: tools.*, config.database, logs.read
+                    </p>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Types de permission</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="perm-read" value="read">
+                            <span class="checkmark"></span>
+                            Lecture (READ)
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="perm-write" value="write">
+                            <span class="checkmark"></span>
+                            Écriture (WRITE)
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="perm-execute" value="execute">
+                            <span class="checkmark"></span>
+                            Exécution (EXECUTE)
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Description (optionnel)</label>
+                    <textarea class="form-input" id="permission-description" rows="3"
+                              placeholder="Description de cette permission..."></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-permission">Annuler</button>
+            <button class="btn btn-primary" id="save-permission">Enregistrer</button>
+        </div>
+    </div>
+</div>
+
+<script>
+class PermissionsManager {
+    constructor() {
+        this.permissions = [];
+        this.users = [];
+        this.editingId = null;
+        this.init();
+    }
+    
+    init() {
+        this.loadUsers();
+        this.loadPermissions();
+        this.setupEventListeners();
+    }
+    
+    setupEventListeners() {
+        // Boutons principaux
+        document.getElementById('add-permission').addEventListener('click', () => {
+            this.showPermissionModal();
+        });
+        
+        document.getElementById('export-permissions').addEventListener('click', () => {
+            this.exportPermissions();
+        });
+        
+        // Modal
+        document.getElementById('close-modal').addEventListener('click', () => {
+            this.hidePermissionModal();
+        });
+        
+        document.getElementById('cancel-permission').addEventListener('click', () => {
+            this.hidePermissionModal();
+        });
+        
+        document.getElementById('save-permission').addEventListener('click', () => {
+            this.savePermission();
+        });
+        
+        // Filtres
+        document.getElementById('filter-user').addEventListener('change', () => {
+            this.applyFilters();
+        });
+        
+        document.getElementById('filter-resource').addEventListener('input', () => {
+            this.applyFilters();
+        });
+        
+        document.getElementById('filter-type').addEventListener('change', () => {
+            this.applyFilters();
+        });
+        
+        document.getElementById('clear-filters').addEventListener('click', () => {
+            this.clearFilters();
+        });
+        
+        // Fermer modal en cliquant sur l'overlay
+        document.getElementById('permission-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'permission-modal') {
+                this.hidePermissionModal();
+            }
+        });
+    }
+    
+    async loadUsers() {
+        try {
+            const response = await fetch('/api/users');
+            this.users = await response.json();
+            
+            const userSelects = [
+                document.getElementById('filter-user'),
+                document.getElementById('permission-user')
+            ];
+            
+            userSelects.forEach(select => {
+                // Garder la première option
+                const firstOption = select.firstElementChild;
+                select.innerHTML = '';
+                select.appendChild(firstOption);
+                
+                this.users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.username;
+                    option.textContent = `${user.full_name || user.username} (${user.role})`;
+                    select.appendChild(option);
+                });
+            });
+        } catch (error) {
+            console.error('Erreur lors du chargement des utilisateurs:', error);
+        }
+    }
+    
+    async loadPermissions() {
+        try {
+            const response = await fetch('/api/permissions');
+            this.permissions = await response.json();
+            this.renderPermissions();
+        } catch (error) {
+            console.error('Erreur lors du chargement des permissions:', error);
+        }
+    }
+    
+    renderPermissions(filteredPermissions = null) {
+        const permissions = filteredPermissions || this.permissions;
+        const tbody = document.getElementById('permissions-table-body');
+        const countEl = document.getElementById('permissions-count');
+        
+        tbody.innerHTML = '';
+        countEl.textContent = `${permissions.length} permission${permissions.length !== 1 ? 's' : ''}`;
+        
+        if (permissions.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center text-secondary py-8">
+                        Aucune permission trouvée
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        permissions.forEach(permission => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <div class="flex items-center gap-2">
+                        <div class="user-avatar-sm">${permission.user_full_name?.charAt(0) || permission.username.charAt(0)}</div>
+                        <div>
+                            <div class="font-medium">${permission.user_full_name || permission.username}</div>
+                            <div class="text-sm text-secondary">${permission.username}</div>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <code class="code-inline">${permission.resource}</code>
+                </td>
+                <td>
+                    <div class="flex gap-1">
+                        ${permission.permissions.map(perm => `
+                            <span class="badge badge-${this.getPermissionColor(perm)}">${perm}</span>
+                        `).join('')}
+                    </div>
+                </td>
+                <td class="text-sm text-secondary">
+                    ${this.formatDate(permission.granted_at)}
+                </td>
+                <td>
+                    <div class="flex gap-2">
+                        <button class="btn btn-secondary btn-sm" onclick="permissionsManager.editPermission(${permission.id})">
+                            ✏️
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="permissionsManager.deletePermission(${permission.id})">
+                            🗑️
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+    
+    showPermissionModal(permission = null) {
+        const modal = document.getElementById('permission-modal');
+        const title = document.getElementById('modal-title');
+        
+        if (permission) {
+            title.textContent = 'Éditer la permission';
+            this.editingId = permission.id;
+            
+            // Remplir le formulaire
+            document.getElementById('permission-id').value = permission.id;
+            document.getElementById('permission-user').value = permission.username;
+            document.getElementById('permission-resource').value = permission.resource;
+            document.getElementById('permission-description').value = permission.description || '';
+            
+            // Cocher les permissions
+            ['read', 'write', 'execute'].forEach(perm => {
+                document.getElementById(`perm-${perm}`).checked = permission.permissions.includes(perm);
+            });
+        } else {
+            title.textContent = 'Nouvelle permission';
+            this.editingId = null;
+            document.getElementById('permission-form').reset();
+        }
+        
+        modal.classList.remove('hidden');
+    }
+    
+    hidePermissionModal() {
+        document.getElementById('permission-modal').classList.add('hidden');
+        this.editingId = null;
+    }
+    
+    async savePermission() {
+        const formData = new FormData();
+        const username = document.getElementById('permission-user').value;
+        const resource = document.getElementById('permission-resource').value;
+        const description = document.getElementById('permission-description').value;
+        
+        const permissions = [];
+        ['read', 'write', 'execute'].forEach(perm => {
+            if (document.getElementById(`perm-${perm}`).checked) {
+                permissions.push(perm);
+            }
+        });
+        
+        if (!username || !resource || permissions.length === 0) {
+            alert('Veuillez remplir tous les champs requis');
+            return;
+        }
+        
+        const data = {
+            username,
+            resource,
+            permissions,
+            description
+        };
+        
+        try {
+            const url = this.editingId ? `/api/permissions/${this.editingId}` : '/api/permissions';
+            const method = this.editingId ? 'PUT' : 'POST';
+            
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
+            
+            if (response.ok) {
+                this.hidePermissionModal();
+                this.loadPermissions();
+                window.showToast(
+                    this.editingId ? 'Permission modifiée avec succès' : 'Permission créée avec succès',
+                    'success'
+                );
+            } else {
+                const error = await response.json();
+                alert(`Erreur: ${error.detail || 'Erreur inconnue'}`);
+            }
+        } catch (error) {
+            console.error('Erreur lors de l\'enregistrement:', error);
+            alert('Erreur lors de l\'enregistrement de la permission');
+        }
+    }
+    
+    editPermission(id) {
+        const permission = this.permissions.find(p => p.id === id);
+        if (permission) {
+            this.showPermissionModal(permission);
+        }
+    }
+    
+    async deletePermission(id) {
+        if (!confirm('Êtes-vous sûr de vouloir supprimer cette permission ?')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/permissions/${id}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                this.loadPermissions();
+                window.showToast('Permission supprimée avec succès', 'success');
+            } else {
+                const error = await response.json();
+                alert(`Erreur: ${error.detail || 'Erreur inconnue'}`);
+            }
+        } catch (error) {
+            console.error('Erreur lors de la suppression:', error);
+            alert('Erreur lors de la suppression de la permission');
+        }
+    }
+    
+    applyFilters() {
+        const userFilter = document.getElementById('filter-user').value;
+        const resourceFilter = document.getElementById('filter-resource').value.toLowerCase();
+        const typeFilter = document.getElementById('filter-type').value;
+        
+        let filtered = this.permissions;
+        
+        if (userFilter) {
+            filtered = filtered.filter(p => p.username === userFilter);
+        }
+        
+        if (resourceFilter) {
+            filtered = filtered.filter(p => 
+                p.resource.toLowerCase().includes(resourceFilter)
+            );
+        }
+        
+        if (typeFilter) {
+            filtered = filtered.filter(p => 
+                p.permissions.includes(typeFilter)
+            );
+        }
+        
+        this.renderPermissions(filtered);
+    }
+    
+    clearFilters() {
+        document.getElementById('filter-user').value = '';
+        document.getElementById('filter-resource').value = '';
+        document.getElementById('filter-type').value = '';
+        this.renderPermissions();
+    }
+    
+    exportPermissions() {
+        const data = this.permissions.map(p => ({
+            username: p.username,
+            resource: p.resource,
+            permissions: p.permissions.join(','),
+            description: p.description || '',
+            granted_at: p.granted_at
+        }));
+        
+        const csv = this.arrayToCSV(data);
+        this.downloadCSV(csv, 'permissions.csv');
+    }
+    
+    arrayToCSV(array) {
+        if (array.length === 0) return '';
+        
+        const headers = Object.keys(array[0]);
+        const csvHeaders = headers.join(',');
+        
+        const csvRows = array.map(row => 
+            headers.map(header => `"${row[header] || ''}"`).join(',')
+        );
+        
+        return [csvHeaders, ...csvRows].join('\n');
+    }
+    
+    downloadCSV(csv, filename) {
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+    
+    getPermissionColor(permission) {
+        const colors = {
+            read: 'info',
+            write: 'warning', 
+            execute: 'danger'
+        };
+        return colors[permission] || 'secondary';
+    }
+    
+    formatDate(dateString) {
+        return new Date(dateString).toLocaleString('fr-FR');
+    }
+}
+
+// Initialiser le gestionnaire de permissions
+const permissionsManager = new PermissionsManager();
+</script>

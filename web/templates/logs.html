@@ -1,0 +1,621 @@
+<!-- Template pour les logs -->
+<div class="logs-management">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold">Logs système</h2>
+        <div class="flex gap-3">
+            <button class="btn btn-secondary" id="export-logs">📤 Exporter</button>
+            <button class="btn btn-secondary" id="clear-logs">🗑️ Effacer</button>
+            <button class="btn btn-primary" id="refresh-logs">🔄 Actualiser</button>
+        </div>
+    </div>
+    
+    <!-- Métriques des logs -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-3xl mb-2">📄</div>
+                <div class="text-2xl font-bold" id="total-logs-count">0</div>
+                <div class="text-sm text-secondary">Total logs</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-3xl mb-2 text-red-500">🚨</div>
+                <div class="text-2xl font-bold text-red-600" id="error-logs-count">0</div>
+                <div class="text-sm text-secondary">Erreurs</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-3xl mb-2 text-yellow-500">⚠️</div>
+                <div class="text-2xl font-bold text-yellow-600" id="warning-logs-count">0</div>
+                <div class="text-sm text-secondary">Avertissements</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-3xl mb-2">📊</div>
+                <div class="text-2xl font-bold" id="logs-size">0 MB</div>
+                <div class="text-sm text-secondary">Taille totale</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filtres -->
+    <div class="card mb-6">
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Recherche</label>
+                    <input type="text" class="form-input" id="search-logs" 
+                           placeholder="Rechercher dans les logs...">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Niveau</label>
+                    <select class="form-input" id="filter-level">
+                        <option value="">Tous les niveaux</option>
+                        <option value="DEBUG">Debug</option>
+                        <option value="INFO">Info</option>
+                        <option value="WARNING">Warning</option>
+                        <option value="ERROR">Error</option>
+                        <option value="CRITICAL">Critical</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Module</label>
+                    <select class="form-input" id="filter-module">
+                        <option value="">Tous les modules</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Période</label>
+                    <select class="form-input" id="filter-period">
+                        <option value="">Toute la période</option>
+                        <option value="1h">Dernière heure</option>
+                        <option value="6h">6 dernières heures</option>
+                        <option value="24h">24 dernières heures</option>
+                        <option value="7d">7 derniers jours</option>
+                        <option value="30d">30 derniers jours</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-secondary w-full" id="clear-filters">Effacer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Contrôles de pagination -->
+    <div class="flex justify-between items-center mb-4">
+        <div class="flex items-center gap-3">
+            <span class="text-sm text-secondary">Afficher:</span>
+            <select class="form-input w-auto" id="page-size">
+                <option value="50">50 par page</option>
+                <option value="100" selected>100 par page</option>
+                <option value="200">200 par page</option>
+                <option value="500">500 par page</option>
+            </select>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <span class="text-sm text-secondary" id="pagination-info">0-0 sur 0</span>
+            <button class="btn btn-secondary btn-sm" id="prev-page" disabled>◀ Précédent</button>
+            <button class="btn btn-secondary btn-sm" id="next-page" disabled>Suivant ▶</button>
+        </div>
+    </div>
+    
+    <!-- Table des logs -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Heure</th>
+                            <th>Niveau</th>
+                            <th>Module</th>
+                            <th>Message</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-table-body">
+                        <!-- Les logs seront ajoutés dynamiquement -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour détails d'un log -->
+<div id="log-details-modal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">Détails du log</h3>
+            <button class="modal-close" id="close-log-details">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="font-semibold">Timestamp:</label>
+                        <div id="log-timestamp" class="text-sm"></div>
+                    </div>
+                    <div>
+                        <label class="font-semibold">Niveau:</label>
+                        <div id="log-level" class="text-sm"></div>
+                    </div>
+                    <div>
+                        <label class="font-semibold">Module:</label>
+                        <div id="log-module" class="text-sm"></div>
+                    </div>
+                    <div>
+                        <label class="font-semibold">Session ID:</label>
+                        <div id="log-session-id" class="text-sm"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="font-semibold">Message:</label>
+                    <div id="log-message" class="bg-gray-100 p-3 rounded text-sm mt-1"></div>
+                </div>
+                
+                <div id="log-extra-data" class="hidden">
+                    <label class="font-semibold">Données supplémentaires:</label>
+                    <pre id="log-extra-content" class="bg-gray-100 p-3 rounded text-sm mt-1 overflow-auto max-h-48"></pre>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" id="close-details">Fermer</button>
+        </div>
+    </div>
+</div>
+
+<script>
+class LogsManager {
+    constructor() {
+        this.logs = [];
+        this.filteredLogs = [];
+        this.currentPage = 1;
+        this.pageSize = 100;
+        this.totalLogs = 0;
+        this.modules = new Set();
+        this.init();
+    }
+    
+    init() {
+        this.loadLogs();
+        this.setupEventListeners();
+        this.setupFilters();
+        this.setupPagination();
+        
+        // Auto-refresh toutes les 30 secondes
+        setInterval(() => {
+            if (document.getElementById('logs-management')) {
+                this.loadLogs(false); // Silent refresh
+            }
+        }, 30000);
+    }
+    
+    setupEventListeners() {
+        // Boutons principaux
+        document.getElementById('refresh-logs').addEventListener('click', () => {
+            this.loadLogs();
+        });
+        
+        document.getElementById('export-logs').addEventListener('click', () => {
+            this.exportLogs();
+        });
+        
+        document.getElementById('clear-logs').addEventListener('click', () => {
+            this.clearLogs();
+        });
+        
+        // Modal détails
+        document.getElementById('close-log-details').addEventListener('click', () => {
+            this.hideLogDetails();
+        });
+        
+        document.getElementById('close-details').addEventListener('click', () => {
+            this.hideLogDetails();
+        });
+        
+        // Filtres
+        document.getElementById('clear-filters').addEventListener('click', () => {
+            this.clearFilters();
+        });
+    }
+    
+    setupFilters() {
+        const searchInput = document.getElementById('search-logs');
+        const levelFilter = document.getElementById('filter-level');
+        const moduleFilter = document.getElementById('filter-module');
+        const periodFilter = document.getElementById('filter-period');
+        
+        [searchInput, levelFilter, moduleFilter, periodFilter].forEach(element => {
+            element.addEventListener('input', () => {
+                this.currentPage = 1;
+                this.applyFilters();
+            });
+        });
+    }
+    
+    setupPagination() {
+        document.getElementById('page-size').addEventListener('change', (e) => {
+            this.pageSize = parseInt(e.target.value);
+            this.currentPage = 1;
+            this.renderLogs();
+        });
+        
+        document.getElementById('prev-page').addEventListener('click', () => {
+            if (this.currentPage > 1) {
+                this.currentPage--;
+                this.renderLogs();
+            }
+        });
+        
+        document.getElementById('next-page').addEventListener('click', () => {
+            const maxPage = Math.ceil(this.filteredLogs.length / this.pageSize);
+            if (this.currentPage < maxPage) {
+                this.currentPage++;
+                this.renderLogs();
+            }
+        });
+    }
+    
+    async loadLogs(showNotification = true) {
+        try {
+            const response = await fetch('/api/logs');
+            const data = await response.json();
+            
+            this.logs = data.logs || [];
+            this.totalLogs = data.total || 0;
+            
+            // Collecter les modules uniques
+            this.modules.clear();
+            this.logs.forEach(log => {
+                if (log.module) {
+                    this.modules.add(log.module);
+                }
+            });
+            
+            this.updateModuleFilter();
+            this.filteredLogs = [...this.logs];
+            this.updateStatistics();
+            this.renderLogs();
+            
+            if (showNotification) {
+                window.showToast('Logs rechargés avec succès', 'success');
+            }
+            
+        } catch (error) {
+            console.error('Erreur chargement logs:', error);
+            if (showNotification) {
+                window.showToast('Erreur lors du chargement des logs', 'error');
+            }
+        }
+    }
+    
+    updateModuleFilter() {
+        const moduleFilter = document.getElementById('filter-module');
+        const currentValue = moduleFilter.value;
+        
+        // Garder la première option
+        moduleFilter.innerHTML = '<option value="">Tous les modules</option>';
+        
+        Array.from(this.modules).sort().forEach(module => {
+            const option = document.createElement('option');
+            option.value = module;
+            option.textContent = module;
+            moduleFilter.appendChild(option);
+        });
+        
+        // Restaurer la valeur sélectionnée
+        moduleFilter.value = currentValue;
+    }
+    
+    updateStatistics() {
+        const totalLogs = this.logs.length;
+        const errorLogs = this.logs.filter(log => log.level === 'ERROR' || log.level === 'CRITICAL').length;
+        const warningLogs = this.logs.filter(log => log.level === 'WARNING').length;
+        
+        // Estimation de la taille (approximative)
+        const estimatedSize = totalLogs * 200; // ~200 bytes par log en moyenne
+        const sizeMB = (estimatedSize / (1024 * 1024)).toFixed(1);
+        
+        document.getElementById('total-logs-count').textContent = totalLogs;
+        document.getElementById('error-logs-count').textContent = errorLogs;
+        document.getElementById('warning-logs-count').textContent = warningLogs;
+        document.getElementById('logs-size').textContent = `${sizeMB} MB`;
+    }
+    
+    applyFilters() {
+        const search = document.getElementById('search-logs').value.toLowerCase();
+        const level = document.getElementById('filter-level').value;
+        const module = document.getElementById('filter-module').value;
+        const period = document.getElementById('filter-period').value;
+        
+        let periodFilter = null;
+        if (period) {
+            const now = new Date();
+            switch (period) {
+                case '1h':
+                    periodFilter = new Date(now - 3600000);
+                    break;
+                case '6h':
+                    periodFilter = new Date(now - 6 * 3600000);
+                    break;
+                case '24h':
+                    periodFilter = new Date(now - 24 * 3600000);
+                    break;
+                case '7d':
+                    periodFilter = new Date(now - 7 * 24 * 3600000);
+                    break;
+                case '30d':
+                    periodFilter = new Date(now - 30 * 24 * 3600000);
+                    break;
+            }
+        }
+        
+        this.filteredLogs = this.logs.filter(log => {
+            const matchesSearch = !search || 
+                log.message.toLowerCase().includes(search) ||
+                (log.module && log.module.toLowerCase().includes(search));
+            
+            const matchesLevel = !level || log.level === level;
+            const matchesModule = !module || log.module === module;
+            
+            let matchesPeriod = true;
+            if (periodFilter) {
+                const logDate = new Date(log.timestamp);
+                matchesPeriod = logDate >= periodFilter;
+            }
+            
+            return matchesSearch && matchesLevel && matchesModule && matchesPeriod;
+        });
+        
+        this.renderLogs();
+    }
+    
+    renderLogs() {
+        const tbody = document.getElementById('logs-table-body');
+        tbody.innerHTML = '';
+        
+        // Pagination
+        const startIndex = (this.currentPage - 1) * this.pageSize;
+        const endIndex = Math.min(startIndex + this.pageSize, this.filteredLogs.length);
+        const pageData = this.filteredLogs.slice(startIndex, endIndex);
+        
+        if (pageData.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center py-8">
+                        <div class="text-secondary">Aucun log trouvé</div>
+                    </td>
+                </tr>
+            `;
+        } else {
+            pageData.forEach(log => {
+                const row = this.createLogRow(log);
+                tbody.appendChild(row);
+            });
+        }
+        
+        this.updatePaginationInfo();
+    }
+    
+    createLogRow(log) {
+        const row = document.createElement('tr');
+        row.className = `log-row log-level-${log.level.toLowerCase()}`;
+        
+        const levelClass = this.getLevelClass(log.level);
+        const levelIcon = this.getLevelIcon(log.level);
+        
+        row.innerHTML = `
+            <td class="text-sm">
+                <div>${this.formatTimestamp(log.timestamp)}</div>
+            </td>
+            <td>
+                <span class="badge ${levelClass}">${levelIcon} ${log.level}</span>
+            </td>
+            <td class="text-sm">
+                <code class="text-xs">${log.module || 'N/A'}</code>
+            </td>
+            <td class="text-sm">
+                <div class="log-message truncate max-w-xs">${this.escapeHtml(log.message)}</div>
+            </td>
+            <td>
+                <button class="btn btn-secondary btn-sm" onclick="logsManager.showLogDetails(${log.id})">
+                    👁️ Détails
+                </button>
+            </td>
+        `;
+        
+        return row;
+    }
+    
+    getLevelClass(level) {
+        const classes = {
+            DEBUG: 'badge-secondary',
+            INFO: 'badge-info',
+            WARNING: 'badge-warning',
+            ERROR: 'badge-danger',
+            CRITICAL: 'badge-danger'
+        };
+        return classes[level] || 'badge-secondary';
+    }
+    
+    getLevelIcon(level) {
+        const icons = {
+            DEBUG: '🐛',
+            INFO: 'ℹ️',
+            WARNING: '⚠️',
+            ERROR: '❌',
+            CRITICAL: '🚨'
+        };
+        return icons[level] || 'ℹ️';
+    }
+    
+    updatePaginationInfo() {
+        const startIndex = (this.currentPage - 1) * this.pageSize + 1;
+        const endIndex = Math.min(this.currentPage * this.pageSize, this.filteredLogs.length);
+        const total = this.filteredLogs.length;
+        
+        document.getElementById('pagination-info').textContent = 
+            `${startIndex}-${endIndex} sur ${total}`;
+        
+        const maxPage = Math.ceil(total / this.pageSize);
+        document.getElementById('prev-page').disabled = this.currentPage <= 1;
+        document.getElementById('next-page').disabled = this.currentPage >= maxPage;
+    }
+    
+    showLogDetails(logId) {
+        const log = this.logs.find(l => l.id === logId);
+        if (!log) return;
+        
+        document.getElementById('log-timestamp').textContent = this.formatTimestamp(log.timestamp, true);
+        document.getElementById('log-level').innerHTML = 
+            `<span class="badge ${this.getLevelClass(log.level)}">${this.getLevelIcon(log.level)} ${log.level}</span>`;
+        document.getElementById('log-module').textContent = log.module || 'N/A';
+        document.getElementById('log-session-id').textContent = log.session_id || 'N/A';
+        document.getElementById('log-message').textContent = log.message;
+        
+        // Données supplémentaires
+        if (log.extra_data) {
+            try {
+                const extraData = typeof log.extra_data === 'string' 
+                    ? JSON.parse(log.extra_data) 
+                    : log.extra_data;
+                document.getElementById('log-extra-content').textContent = 
+                    JSON.stringify(extraData, null, 2);
+                document.getElementById('log-extra-data').classList.remove('hidden');
+            } catch (e) {
+                document.getElementById('log-extra-data').classList.add('hidden');
+            }
+        } else {
+            document.getElementById('log-extra-data').classList.add('hidden');
+        }
+        
+        document.getElementById('log-details-modal').classList.remove('hidden');
+    }
+    
+    hideLogDetails() {
+        document.getElementById('log-details-modal').classList.add('hidden');
+    }
+    
+    clearFilters() {
+        document.getElementById('search-logs').value = '';
+        document.getElementById('filter-level').value = '';
+        document.getElementById('filter-module').value = '';
+        document.getElementById('filter-period').value = '';
+        this.currentPage = 1;
+        this.applyFilters();
+    }
+    
+    async exportLogs() {
+        try {
+            const response = await fetch('/api/logs/export', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    filters: {
+                        search: document.getElementById('search-logs').value,
+                        level: document.getElementById('filter-level').value,
+                        module: document.getElementById('filter-module').value,
+                        period: document.getElementById('filter-period').value
+                    }
+                })
+            });
+            
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `logs-${new Date().toISOString().split('T')[0]}.csv`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+                
+                window.showToast('Logs exportés avec succès', 'success');
+            } else {
+                window.showToast('Erreur lors de l\'export', 'error');
+            }
+            
+        } catch (error) {
+            console.error('Erreur export logs:', error);
+            window.showToast('Erreur lors de l\'export des logs', 'error');
+        }
+    }
+    
+    async clearLogs() {
+        if (!confirm('Êtes-vous sûr de vouloir effacer tous les logs ? Cette action est irréversible.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/logs/clear', {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                window.showToast('Logs effacés avec succès', 'success');
+                this.loadLogs(false);
+            } else {
+                window.showToast('Erreur lors de l\'effacement', 'error');
+            }
+            
+        } catch (error) {
+            console.error('Erreur effacement logs:', error);
+            window.showToast('Erreur lors de l\'effacement des logs', 'error');
+        }
+    }
+    
+    formatTimestamp(timestamp, detailed = false) {
+        const date = new Date(timestamp);
+        if (detailed) {
+            return date.toLocaleString('fr-FR');
+        }
+        
+        const now = new Date();
+        const diff = now - date;
+        
+        if (diff < 60000) {
+            return 'À l\'instant';
+        } else if (diff < 3600000) {
+            return `${Math.floor(diff / 60000)} min`;
+        } else if (diff < 86400000) {
+            return `${Math.floor(diff / 3600000)}h ${Math.floor((diff % 3600000) / 60000)}m`;
+        } else {
+            return date.toLocaleDateString('fr-FR') + ' ' + date.toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+    }
+    
+    escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+}
+
+// Initialiser le gestionnaire de logs
+const logsManager = new LogsManager();
+</script>

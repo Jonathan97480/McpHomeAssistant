@@ -1,0 +1,713 @@
+<!-- Template pour l'administration -->
+<div class="admin-management">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold">Administration</h2>
+        <div class="flex gap-3">
+            <button class="btn btn-secondary" id="export-data">📦 Export données</button>
+            <button class="btn btn-danger" id="restart-server">🔄 Redémarrer</button>
+        </div>
+    </div>
+    
+    <!-- Métriques système -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-3xl mb-2">👥</div>
+                <div class="text-2xl font-bold" id="total-users-count">0</div>
+                <div class="text-sm text-secondary">Utilisateurs</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-3xl mb-2">🔗</div>
+                <div class="text-2xl font-bold" id="active-sessions-count">0</div>
+                <div class="text-sm text-secondary">Sessions actives</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-3xl mb-2">💾</div>
+                <div class="text-2xl font-bold" id="database-size">0 MB</div>
+                <div class="text-sm text-secondary">Taille BDD</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-3xl mb-2">⚡</div>
+                <div class="text-2xl font-bold" id="system-load">0%</div>
+                <div class="text-sm text-secondary">Charge système</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Gestion des utilisateurs -->
+    <div class="card mb-6">
+        <div class="card-header">
+            <h3 class="card-title">Gestion des utilisateurs</h3>
+            <button class="btn btn-primary btn-sm" id="add-user">➕ Nouvel utilisateur</button>
+        </div>
+        <div class="card-body">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Utilisateur</th>
+                            <th>Rôle</th>
+                            <th>Dernière connexion</th>
+                            <th>Sessions actives</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body">
+                        <!-- Les utilisateurs seront ajoutés dynamiquement -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Monitoring système -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- Activité récente -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Activité récente</h3>
+            </div>
+            <div class="card-body">
+                <div id="recent-activity" class="space-y-2 max-h-64 overflow-y-auto">
+                    <!-- L'activité sera ajoutée dynamiquement -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Statistiques système -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Statistiques système</h3>
+            </div>
+            <div class="card-body">
+                <div class="space-y-4">
+                    <div class="flex justify-between">
+                        <span>Mémoire utilisée:</span>
+                        <span id="memory-usage" class="font-semibold">0 MB</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Processus actifs:</span>
+                        <span id="active-processes" class="font-semibold">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Uptime:</span>
+                        <span id="system-uptime" class="font-semibold">--</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Version:</span>
+                        <span id="server-version" class="font-semibold">1.0.0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Actions système -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Actions système</h3>
+        </div>
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button class="btn btn-secondary w-full" id="backup-database">
+                    💾 Sauvegarder BDD
+                </button>
+                <button class="btn btn-secondary w-full" id="rotate-logs">
+                    📄 Rotation logs
+                </button>
+                <button class="btn btn-secondary w-full" id="clear-cache">
+                    🗑️ Vider cache
+                </button>
+                <button class="btn btn-warning w-full" id="reset-permissions">
+                    🔄 Reset permissions
+                </button>
+                <button class="btn btn-warning w-full" id="clean-sessions">
+                    🧹 Nettoyer sessions
+                </button>
+                <button class="btn btn-danger w-full" id="factory-reset">
+                    ⚠️ Reset usine
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour créer/éditer un utilisateur -->
+<div id="user-modal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title" id="user-modal-title">Nouvel utilisateur</h3>
+            <button class="modal-close" id="close-user-modal">✕</button>
+        </div>
+        <div class="modal-body">
+            <form id="user-form">
+                <input type="hidden" id="user-id" value="">
+                
+                <div class="form-group">
+                    <label class="form-label required">Nom d'utilisateur</label>
+                    <input type="text" class="form-input" id="user-username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Nom complet</label>
+                    <input type="text" class="form-input" id="user-fullname">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="user-email">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label required">Rôle</label>
+                    <select class="form-input" id="user-role" required>
+                        <option value="user">Utilisateur</option>
+                        <option value="admin">Administrateur</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="password-group">
+                    <label class="form-label required">Mot de passe</label>
+                    <input type="password" class="form-input" id="user-password" required>
+                    <p class="form-help">Minimum 8 caractères</p>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="user-active" checked>
+                        <span class="checkmark"></span>
+                        Compte actif
+                    </label>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-user">Annuler</button>
+            <button class="btn btn-primary" id="save-user">Enregistrer</button>
+        </div>
+    </div>
+</div>
+
+<script>
+class AdminManager {
+    constructor() {
+        this.users = [];
+        this.editingUserId = null;
+        this.init();
+    }
+    
+    init() {
+        this.loadData();
+        this.setupEventListeners();
+        
+        // Auto-refresh toutes les 30 secondes
+        setInterval(() => {
+            this.loadMetrics();
+            this.loadRecentActivity();
+        }, 30000);
+    }
+    
+    setupEventListeners() {
+        // Boutons principaux
+        document.getElementById('add-user').addEventListener('click', () => {
+            this.showUserModal();
+        });
+        
+        document.getElementById('export-data').addEventListener('click', () => {
+            this.exportData();
+        });
+        
+        document.getElementById('restart-server').addEventListener('click', () => {
+            this.restartServer();
+        });
+        
+        // Modal utilisateur
+        document.getElementById('close-user-modal').addEventListener('click', () => {
+            this.hideUserModal();
+        });
+        
+        document.getElementById('cancel-user').addEventListener('click', () => {
+            this.hideUserModal();
+        });
+        
+        document.getElementById('save-user').addEventListener('click', () => {
+            this.saveUser();
+        });
+        
+        // Actions système
+        document.getElementById('backup-database').addEventListener('click', () => {
+            this.backupDatabase();
+        });
+        
+        document.getElementById('rotate-logs').addEventListener('click', () => {
+            this.rotateLogs();
+        });
+        
+        document.getElementById('clear-cache').addEventListener('click', () => {
+            this.clearCache();
+        });
+        
+        document.getElementById('reset-permissions').addEventListener('click', () => {
+            this.resetPermissions();
+        });
+        
+        document.getElementById('clean-sessions').addEventListener('click', () => {
+            this.cleanSessions();
+        });
+        
+        document.getElementById('factory-reset').addEventListener('click', () => {
+            this.factoryReset();
+        });
+    }
+    
+    async loadData() {
+        await Promise.all([
+            this.loadMetrics(),
+            this.loadUsers(),
+            this.loadRecentActivity()
+        ]);
+    }
+    
+    async loadMetrics() {
+        try {
+            const response = await fetch('/api/admin/metrics');
+            const metrics = await response.json();
+            
+            document.getElementById('total-users-count').textContent = metrics.total_users || 0;
+            document.getElementById('active-sessions-count').textContent = metrics.active_sessions || 0;
+            document.getElementById('database-size').textContent = `${metrics.database_size || 0} MB`;
+            document.getElementById('system-load').textContent = `${metrics.system_load || 0}%`;
+            document.getElementById('memory-usage').textContent = `${metrics.memory_usage || 0} MB`;
+            document.getElementById('active-processes').textContent = metrics.active_processes || 0;
+            document.getElementById('system-uptime').textContent = this.formatUptime(metrics.uptime || 0);
+            document.getElementById('server-version').textContent = metrics.version || '1.0.0';
+            
+        } catch (error) {
+            console.error('Erreur chargement métriques admin:', error);
+        }
+    }
+    
+    async loadUsers() {
+        try {
+            const response = await fetch('/api/admin/users');
+            this.users = await response.json();
+            this.renderUsers();
+            
+        } catch (error) {
+            console.error('Erreur chargement utilisateurs:', error);
+            window.showToast('Erreur lors du chargement des utilisateurs', 'error');
+        }
+    }
+    
+    renderUsers() {
+        const tbody = document.getElementById('users-table-body');
+        tbody.innerHTML = '';
+        
+        if (this.users.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center py-4">
+                        Aucun utilisateur trouvé
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        this.users.forEach(user => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <div class="flex items-center gap-2">
+                        <div class="user-avatar-sm">${(user.full_name || user.username).charAt(0)}</div>
+                        <div>
+                            <div class="font-medium">${user.full_name || user.username}</div>
+                            <div class="text-sm text-secondary">${user.username}</div>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <span class="badge ${user.role === 'admin' ? 'badge-warning' : 'badge-info'}">
+                        ${user.role === 'admin' ? '👑 Admin' : '👤 User'}
+                    </span>
+                </td>
+                <td class="text-sm">
+                    ${user.last_login ? this.formatDate(user.last_login) : 'Jamais'}
+                </td>
+                <td class="text-sm">
+                    <span class="badge ${user.active_sessions > 0 ? 'badge-success' : 'badge-secondary'}">
+                        ${user.active_sessions || 0}
+                    </span>
+                </td>
+                <td>
+                    <div class="flex gap-2">
+                        <button class="btn btn-secondary btn-sm" onclick="adminManager.editUser(${user.id})">
+                            ✏️
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="adminManager.deleteUser(${user.id})" 
+                                ${user.username === 'admin' ? 'disabled' : ''}>
+                            🗑️
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+    
+    async loadRecentActivity() {
+        try {
+            const response = await fetch('/api/admin/activity');
+            const activities = await response.json();
+            
+            const container = document.getElementById('recent-activity');
+            container.innerHTML = '';
+            
+            if (activities.length === 0) {
+                container.innerHTML = '<p class="text-secondary">Aucune activité récente</p>';
+                return;
+            }
+            
+            activities.slice(0, 10).forEach(activity => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center gap-3 p-2 bg-gray-50 rounded';
+                item.innerHTML = `
+                    <div class="text-lg">${this.getActivityIcon(activity.type)}</div>
+                    <div class="flex-1">
+                        <div class="text-sm">${activity.message}</div>
+                        <div class="text-xs text-secondary">${this.formatDate(activity.timestamp)}</div>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+            
+        } catch (error) {
+            console.error('Erreur chargement activité:', error);
+        }
+    }
+    
+    showUserModal(user = null) {
+        const modal = document.getElementById('user-modal');
+        const title = document.getElementById('user-modal-title');
+        const passwordGroup = document.getElementById('password-group');
+        const passwordInput = document.getElementById('user-password');
+        
+        if (user) {
+            title.textContent = 'Éditer l\'utilisateur';
+            this.editingUserId = user.id;
+            
+            document.getElementById('user-id').value = user.id;
+            document.getElementById('user-username').value = user.username;
+            document.getElementById('user-fullname').value = user.full_name || '';
+            document.getElementById('user-email').value = user.email || '';
+            document.getElementById('user-role').value = user.role;
+            document.getElementById('user-active').checked = user.is_active !== false;
+            
+            // Pour l'édition, le mot de passe est optionnel
+            passwordInput.required = false;
+            passwordGroup.querySelector('.form-label').textContent = 'Nouveau mot de passe (optionnel)';
+            
+        } else {
+            title.textContent = 'Nouvel utilisateur';
+            this.editingUserId = null;
+            document.getElementById('user-form').reset();
+            document.getElementById('user-active').checked = true;
+            
+            // Pour la création, le mot de passe est requis
+            passwordInput.required = true;
+            passwordGroup.querySelector('.form-label').textContent = 'Mot de passe';
+        }
+        
+        modal.classList.remove('hidden');
+    }
+    
+    hideUserModal() {
+        document.getElementById('user-modal').classList.add('hidden');
+        this.editingUserId = null;
+    }
+    
+    async saveUser() {
+        const form = document.getElementById('user-form');
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        
+        const userData = {
+            username: document.getElementById('user-username').value,
+            full_name: document.getElementById('user-fullname').value || null,
+            email: document.getElementById('user-email').value || null,
+            role: document.getElementById('user-role').value,
+            is_active: document.getElementById('user-active').checked
+        };
+        
+        const password = document.getElementById('user-password').value;
+        if (password) {
+            userData.password = password;
+        }
+        
+        try {
+            const url = this.editingUserId 
+                ? `/api/admin/users/${this.editingUserId}`
+                : '/api/admin/users';
+            const method = this.editingUserId ? 'PUT' : 'POST';
+            
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(userData)
+            });
+            
+            if (response.ok) {
+                this.hideUserModal();
+                this.loadUsers();
+                window.showToast(
+                    this.editingUserId ? 'Utilisateur modifié avec succès' : 'Utilisateur créé avec succès',
+                    'success'
+                );
+            } else {
+                const error = await response.json();
+                window.showToast(`Erreur: ${error.detail || 'Erreur inconnue'}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('Erreur sauvegarde utilisateur:', error);
+            window.showToast('Erreur lors de la sauvegarde', 'error');
+        }
+    }
+    
+    editUser(userId) {
+        const user = this.users.find(u => u.id === userId);
+        if (user) {
+            this.showUserModal(user);
+        }
+    }
+    
+    async deleteUser(userId) {
+        const user = this.users.find(u => u.id === userId);
+        if (!user) return;
+        
+        if (!confirm(`Êtes-vous sûr de vouloir supprimer l'utilisateur "${user.username}" ?`)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/admin/users/${userId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                this.loadUsers();
+                window.showToast('Utilisateur supprimé avec succès', 'success');
+            } else {
+                const error = await response.json();
+                window.showToast(`Erreur: ${error.detail || 'Erreur inconnue'}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('Erreur suppression utilisateur:', error);
+            window.showToast('Erreur lors de la suppression', 'error');
+        }
+    }
+    
+    // Actions système
+    async backupDatabase() {
+        try {
+            const response = await fetch('/api/admin/backup', { method: 'POST' });
+            if (response.ok) {
+                window.showToast('Sauvegarde créée avec succès', 'success');
+            } else {
+                window.showToast('Erreur lors de la sauvegarde', 'error');
+            }
+        } catch (error) {
+            console.error('Erreur sauvegarde:', error);
+            window.showToast('Erreur lors de la sauvegarde', 'error');
+        }
+    }
+    
+    async rotateLogs() {
+        try {
+            const response = await fetch('/api/admin/logs/rotate', { method: 'POST' });
+            if (response.ok) {
+                window.showToast('Rotation des logs effectuée', 'success');
+            } else {
+                window.showToast('Erreur lors de la rotation', 'error');
+            }
+        } catch (error) {
+            console.error('Erreur rotation logs:', error);
+            window.showToast('Erreur lors de la rotation des logs', 'error');
+        }
+    }
+    
+    async clearCache() {
+        try {
+            const response = await fetch('/api/admin/cache/clear', { method: 'POST' });
+            if (response.ok) {
+                window.showToast('Cache vidé avec succès', 'success');
+            } else {
+                window.showToast('Erreur lors du vidage du cache', 'error');
+            }
+        } catch (error) {
+            console.error('Erreur vidage cache:', error);
+            window.showToast('Erreur lors du vidage du cache', 'error');
+        }
+    }
+    
+    async resetPermissions() {
+        if (!confirm('Voulez-vous vraiment remettre à zéro toutes les permissions ?')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/admin/permissions/reset', { method: 'POST' });
+            if (response.ok) {
+                window.showToast('Permissions remises à zéro', 'success');
+            } else {
+                window.showToast('Erreur lors du reset des permissions', 'error');
+            }
+        } catch (error) {
+            console.error('Erreur reset permissions:', error);
+            window.showToast('Erreur lors du reset des permissions', 'error');
+        }
+    }
+    
+    async cleanSessions() {
+        try {
+            const response = await fetch('/api/admin/sessions/clean', { method: 'POST' });
+            if (response.ok) {
+                window.showToast('Sessions nettoyées avec succès', 'success');
+                this.loadMetrics();
+            } else {
+                window.showToast('Erreur lors du nettoyage', 'error');
+            }
+        } catch (error) {
+            console.error('Erreur nettoyage sessions:', error);
+            window.showToast('Erreur lors du nettoyage des sessions', 'error');
+        }
+    }
+    
+    async factoryReset() {
+        const confirmation = prompt('Tapez "RESET" pour confirmer la remise à zéro complète:');
+        if (confirmation !== 'RESET') {
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/admin/factory-reset', { method: 'POST' });
+            if (response.ok) {
+                window.showToast('Remise à zéro effectuée. Redirection...', 'success');
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 2000);
+            } else {
+                window.showToast('Erreur lors de la remise à zéro', 'error');
+            }
+        } catch (error) {
+            console.error('Erreur factory reset:', error);
+            window.showToast('Erreur lors de la remise à zéro', 'error');
+        }
+    }
+    
+    async exportData() {
+        try {
+            const response = await fetch('/api/admin/export');
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `mcp-bridge-export-${new Date().toISOString().split('T')[0]}.zip`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+                
+                window.showToast('Données exportées avec succès', 'success');
+            } else {
+                window.showToast('Erreur lors de l\'export', 'error');
+            }
+        } catch (error) {
+            console.error('Erreur export:', error);
+            window.showToast('Erreur lors de l\'export des données', 'error');
+        }
+    }
+    
+    async restartServer() {
+        if (!confirm('Voulez-vous vraiment redémarrer le serveur ?')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/admin/restart', { method: 'POST' });
+            if (response.ok) {
+                window.showToast('Redémarrage en cours...', 'warning', 5000);
+                // Rediriger vers la page de login après 5 secondes
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 5000);
+            } else {
+                window.showToast('Erreur lors du redémarrage', 'error');
+            }
+        } catch (error) {
+            console.error('Erreur redémarrage:', error);
+            window.showToast('Erreur lors du redémarrage', 'error');
+        }
+    }
+    
+    // Utilitaires
+    formatUptime(seconds) {
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        
+        if (days > 0) return `${days}j ${hours}h ${minutes}m`;
+        if (hours > 0) return `${hours}h ${minutes}m`;
+        return `${minutes}m`;
+    }
+    
+    formatDate(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diff = now - date;
+        
+        if (diff < 60000) return 'À l\'instant';
+        if (diff < 3600000) return `Il y a ${Math.floor(diff / 60000)} min`;
+        if (diff < 86400000) return `Il y a ${Math.floor(diff / 3600000)} h`;
+        
+        return date.toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+    
+    getActivityIcon(type) {
+        const icons = {
+            login: '🔑',
+            logout: '🚪',
+            error: '❌',
+            warning: '⚠️',
+            info: 'ℹ️',
+            user_created: '👤',
+            user_deleted: '🗑️',
+            permission_changed: '🔐',
+            backup: '💾',
+            restart: '🔄'
+        };
+        return icons[type] || 'ℹ️';
+    }
+}
+
+// Initialiser le gestionnaire d'administration
+const adminManager = new AdminManager();
+</script>
