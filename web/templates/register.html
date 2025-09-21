@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connexion - HTTP-MCP Bridge</title>
+    <title>Inscription - HTTP-MCP Bridge</title>
     <link rel="stylesheet" href="/static/css/main.css">
 </head>
 <body>
@@ -14,11 +14,11 @@
                     🌉
                 </div>
                 <h2 class="card-title text-xl">HTTP-MCP Bridge</h2>
-                <p class="card-subtitle">Connectez-vous à votre dashboard</p>
+                <p class="card-subtitle">Créez votre compte</p>
             </div>
             
             <div class="card-content">
-                <form id="login-form" class="space-y-4">
+                <form id="register-form" class="space-y-4">
                     <div class="form-group">
                         <label for="username" class="form-label">Nom d'utilisateur</label>
                         <input 
@@ -28,7 +28,22 @@
                             class="form-input" 
                             required 
                             autocomplete="username"
-                            placeholder="Entrez votre nom d'utilisateur"
+                            placeholder="Choisissez un nom d'utilisateur"
+                            minlength="3"
+                        >
+                        <p class="text-xs text-secondary mt-1">Au moins 3 caractères</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email" class="form-label">Email</label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            class="form-input" 
+                            required 
+                            autocomplete="email"
+                            placeholder="votre@email.com"
                         >
                     </div>
                     
@@ -40,31 +55,47 @@
                             name="password" 
                             class="form-input" 
                             required 
-                            autocomplete="current-password"
-                            placeholder="Entrez votre mot de passe"
+                            autocomplete="new-password"
+                            placeholder="Créez un mot de passe"
+                            minlength="6"
+                        >
+                        <p class="text-xs text-secondary mt-1">Au moins 6 caractères, 1 majuscule, 1 minuscule, 1 chiffre</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="confirm_password" class="form-label">Confirmer le mot de passe</label>
+                        <input 
+                            type="password" 
+                            id="confirm_password" 
+                            name="confirm_password" 
+                            class="form-input" 
+                            required 
+                            autocomplete="new-password"
+                            placeholder="Répétez votre mot de passe"
                         >
                     </div>
                     
                     <div class="form-group">
                         <label class="flex items-center gap-2">
-                            <input type="checkbox" name="remember" class="form-checkbox">
-                            <span class="text-sm">Se souvenir de moi</span>
+                            <input type="checkbox" name="terms" class="form-checkbox" required>
+                            <span class="text-sm">J'accepte les conditions d'utilisation</span>
                         </label>
                     </div>
                     
                     <button type="submit" class="btn btn-primary w-full">
-                        <span id="login-text">Se connecter</span>
-                        <span id="login-loading" class="hidden">Connexion...</span>
+                        <span id="register-text">Créer mon compte</span>
+                        <span id="register-loading" class="hidden">Création...</span>
                     </button>
                 </form>
                 
-                <div id="login-error" class="alert alert-error mt-3 hidden"></div>
+                <div id="register-error" class="alert alert-error mt-3 hidden"></div>
+                <div id="register-success" class="alert alert-success mt-3 hidden"></div>
                 
-                <!-- Lien pour créer un compte -->
+                <!-- Lien pour retourner à la connexion -->
                 <div class="text-center mt-4">
-                    <p class="text-sm text-secondary mb-2">Pas encore de compte ?</p>
-                    <a href="/register" class="btn btn-outline w-full">
-                        Créer un compte
+                    <p class="text-sm text-secondary mb-2">Déjà un compte ?</p>
+                    <a href="/login" class="btn btn-outline w-full">
+                        Se connecter
                     </a>
                 </div>
             </div>
@@ -92,7 +123,7 @@
     
     <script src="/static/js/dashboard.js"></script>
     <script>
-        // Gestion spécifique de la page de login
+        // Gestion spécifique de la page d'inscription
         document.addEventListener('DOMContentLoaded', () => {
             // Masquer le loader global s'il est affiché
             const globalLoader = document.getElementById('loader');
@@ -102,60 +133,88 @@
             
             // Rediriger si déjà connecté
             const token = localStorage.getItem('mcp_token');
-            if (token && window.location.pathname === '/login') {
+            if (token && window.location.pathname === '/register') {
                 window.location.href = '/dashboard';
                 return;
             }
             
-            const form = document.getElementById('login-form');
-            const errorDiv = document.getElementById('login-error');
-            const loginText = document.getElementById('login-text');
-            const loginLoading = document.getElementById('login-loading');
+            const form = document.getElementById('register-form');
+            const errorDiv = document.getElementById('register-error');
+            const successDiv = document.getElementById('register-success');
+            const registerText = document.getElementById('register-text');
+            const registerLoading = document.getElementById('register-loading');
+            
+            // Validation en temps réel des mots de passe
+            const password = document.getElementById('password');
+            const confirmPassword = document.getElementById('confirm_password');
+            
+            function validatePasswords() {
+                if (password.value !== confirmPassword.value) {
+                    confirmPassword.setCustomValidity('Les mots de passe ne correspondent pas');
+                } else {
+                    confirmPassword.setCustomValidity('');
+                }
+            }
+            
+            password.addEventListener('input', validatePasswords);
+            confirmPassword.addEventListener('input', validatePasswords);
             
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
+                // Validation finale
+                if (password.value !== confirmPassword.value) {
+                    errorDiv.textContent = 'Les mots de passe ne correspondent pas';
+                    errorDiv.classList.remove('hidden');
+                    return;
+                }
+                
                 // UI Loading state
-                loginText.classList.add('hidden');
-                loginLoading.classList.remove('hidden');
+                registerText.classList.add('hidden');
+                registerLoading.classList.remove('hidden');
                 errorDiv.classList.add('hidden');
+                successDiv.classList.add('hidden');
                 
                 const formData = new FormData(form);
-                const credentials = {
+                const userData = {
                     username: formData.get('username'),
+                    email: formData.get('email'),
                     password: formData.get('password')
                 };
                 
                 try {
-                    const response = await fetch('/auth/login', {
+                    const response = await fetch('/auth/register', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify(credentials)
+                        body: JSON.stringify(userData)
                     });
                     
                     if (response.ok) {
                         const data = await response.json();
                         
-                        // Stocker le token et les infos utilisateur
-                        localStorage.setItem('mcp_token', data.access_token);
-                        localStorage.setItem('mcp_user', JSON.stringify(data.user || {}));
+                        // Afficher le succès
+                        successDiv.textContent = 'Compte créé avec succès ! Vous allez être redirigé vers la connexion.';
+                        successDiv.classList.remove('hidden');
                         
-                        // Rediriger vers le dashboard
-                        window.location.href = '/dashboard';
+                        // Rediriger vers login après 2 secondes
+                        setTimeout(() => {
+                            window.location.href = '/login';
+                        }, 2000);
+                        
                     } else {
                         const error = await response.json();
-                        throw new Error(error.detail || 'Erreur de connexion');
+                        throw new Error(error.detail || 'Erreur lors de la création du compte');
                     }
                 } catch (error) {
-                    console.error('Erreur login:', error);
-                    errorDiv.textContent = error.message || 'Erreur de connexion. Vérifiez vos identifiants.';
+                    console.error('Erreur inscription:', error);
+                    errorDiv.textContent = error.message || 'Erreur lors de la création du compte. Veuillez réessayer.';
                     errorDiv.classList.remove('hidden');
                 } finally {
                     // Reset UI
-                    loginText.classList.remove('hidden');
-                    loginLoading.classList.add('hidden');
+                    registerText.classList.remove('hidden');
+                    registerLoading.classList.add('hidden');
                 }
             });
             

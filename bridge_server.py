@@ -1984,6 +1984,11 @@ async def login_page(request: Request):
     """Page de connexion"""
     return templates.TemplateResponse("login.html", {"request": request})
 
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    """Page d'inscription"""
+    return templates.TemplateResponse("register.html", {"request": request})
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_page(request: Request):
     """Page principale du dashboard"""
