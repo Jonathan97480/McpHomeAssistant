@@ -15,9 +15,10 @@ from enum import Enum
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Header, Request, Depends
+from fastapi import FastAPI, HTTPException, Header, Request, Depends, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 import uvicorn
 
@@ -33,6 +34,9 @@ from database import db_manager, log_manager, setup_database, cleanup_old_data_t
 
 # Import du système de cache et circuit breaker
 from cache_manager import cache_manager, CircuitBreakerOpenError
+
+# Import du système d'authentification
+from auth_manager import auth_manager, UserCreate, UserLogin, UserResponse, TokenResponse, UserRole
 
 # Variables globales pour le serveur MCP
 mcp_server = None
@@ -633,6 +637,10 @@ async def lifespan(app: FastAPI):
     # Initialiser la base de données
     await setup_database()
     
+    # Initialiser le système d'authentification
+    await auth_manager.initialize()
+    logging.info("🔐 Authentication system initialized")
+    
     # Démarrer les composants
     await request_queue.start()
     await session_pool.start()
@@ -997,6 +1005,61 @@ async def bridge_status():
     })
 
 
+# 🔐 Authentication Dependencies
+security = HTTPBearer()
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> UserResponse:
+    """Dépendance pour obtenir l'utilisateur actuel depuis le token JWT"""
+    try:
+        token = credentials.credentials
+        token_data = auth_manager.verify_token(token)
+        
+        if token_data is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        user = await auth_manager.get_user_by_id(token_data.user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Authentication error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+async def get_current_admin_user(current_user: UserResponse = Depends(get_current_user)) -> UserResponse:
+    """Dépendance pour vérifier que l'utilisateur est admin"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+    return current_user
+
+def get_client_ip(request: Request) -> str:
+    """Récupère l'IP du client"""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+# 🌐 Endpoints API
+
+
 @app.get("/health")
 async def health_check():
     """Health check simple"""
@@ -1004,6 +1067,184 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat()
     })
+
+
+# 🔐 Authentication Endpoints
+
+@app.post("/auth/register", response_model=UserResponse)
+async def register_user(user_data: UserCreate, request: Request):
+    """Inscription d'un nouvel utilisateur"""
+    try:
+        ip_address = get_client_ip(request)
+        logger.info(f"🔐 User registration attempt: {user_data.username} from {ip_address}")
+        
+        # Créer l'utilisateur
+        user = await auth_manager.create_user(user_data)
+        
+        # Log pour audit
+        await db_manager.log_request(
+            endpoint="/auth/register",
+            method="POST",
+            user_id=user.id,
+            ip_address=ip_address,
+            status_code=201
+        )
+        
+        return user
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Registration error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed"
+        )
+
+@app.post("/auth/login", response_model=TokenResponse)
+async def login_user(login_data: UserLogin, request: Request):
+    """Connexion utilisateur"""
+    try:
+        ip_address = get_client_ip(request)
+        user_agent = request.headers.get("User-Agent")
+        
+        logger.info(f"🔐 Login attempt: {login_data.username} from {ip_address}")
+        
+        # Authentifier l'utilisateur
+        user = await auth_manager.authenticate_user(
+            login_data.username, 
+            login_data.password,
+            user_agent,
+            ip_address
+        )
+        
+        if not user:
+            # Log tentative échouée
+            await db_manager.log_error(
+                error_type="AUTH_FAILED",
+                error_message=f"Failed login for {login_data.username}",
+                endpoint="/auth/login",
+                user_id=None
+            )
+            
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Créer la session
+        token_response = await auth_manager.create_user_session(user, user_agent, ip_address)
+        
+        # Log connexion réussie
+        await db_manager.log_request(
+            endpoint="/auth/login",
+            method="POST",
+            user_id=user.id,
+            ip_address=ip_address,
+            status_code=200
+        )
+        
+        logger.info(f"✅ User logged in successfully: {user.username}")
+        return token_response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Login error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Login failed"
+        )
+
+@app.post("/auth/refresh", response_model=TokenResponse)
+async def refresh_access_token(refresh_token: str, request: Request):
+    """Rafraîchit un token d'accès"""
+    try:
+        ip_address = get_client_ip(request)
+        
+        token_response = await auth_manager.refresh_token(refresh_token)
+        if not token_response:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Log refresh réussi
+        await db_manager.log_request(
+            endpoint="/auth/refresh",
+            method="POST",
+            user_id=token_response.user.id,
+            ip_address=ip_address,
+            status_code=200
+        )
+        
+        return token_response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Token refresh error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Token refresh failed"
+        )
+
+@app.post("/auth/logout")
+async def logout_user(current_user: UserResponse = Depends(get_current_user), 
+                     credentials: HTTPAuthorizationCredentials = Depends(security),
+                     request: Request = None):
+    """Déconnexion utilisateur"""
+    try:
+        ip_address = get_client_ip(request) if request else "unknown"
+        
+        # Révoquer la session
+        success = await auth_manager.revoke_session(credentials.credentials)
+        
+        # Log déconnexion
+        await db_manager.log_request(
+            endpoint="/auth/logout",
+            method="POST",
+            user_id=current_user.id,
+            ip_address=ip_address,
+            status_code=200
+        )
+        
+        logger.info(f"✅ User logged out: {current_user.username}")
+        
+        return JSONResponse({
+            "status": "success",
+            "message": "Logged out successfully"
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Logout error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Logout failed"
+        )
+
+@app.get("/auth/me", response_model=UserResponse)
+async def get_current_user_info(current_user: UserResponse = Depends(get_current_user)):
+    """Récupère les informations de l'utilisateur connecté"""
+    return current_user
+
+@app.get("/auth/sessions")
+async def get_user_sessions(current_user: UserResponse = Depends(get_current_user)):
+    """Récupère les sessions actives de l'utilisateur"""
+    try:
+        sessions = await auth_manager.get_active_sessions(current_user.id)
+        return JSONResponse({
+            "status": "success",
+            "sessions": sessions
+        })
+    except Exception as e:
+        logger.error(f"❌ Failed to get user sessions: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve sessions"
+        )
 
 
 @app.get("/admin/stats")
@@ -1114,7 +1355,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "bridge_server:app",
         host="0.0.0.0",
-        port=3003,
+        port=8080,
         reload=False,  # Désactiver reload pour éviter les conflits
         log_level="info"
     )

@@ -77,41 +77,49 @@ GET  /mcp/status        # ✅ Statut bridge et sessions
 
 ---
 
-### **PHASE 2.4 : OPTIMISATIONS** ⏳ **À FAIRE**
-**État : ⏳ Planifié**
+### **PHASE 2.4 : CACHE & CIRCUIT BREAKER** ✅ **TERMINÉ**
+**État : ✅ Complété**
 
-#### 🎯 **Milestone 2.4 : Cache L1 Mémoire & Circuit Breaker**
-- [ ] **LRU Cache** : Cache mémoire simple pour outils et réponses
-- [ ] **Circuit Breaker** : Protection contre pannes Home Assistant
-- [ ] **Retry Logic** : Retry automatique avec backoff exponentiel
-- [ ] **Metrics Endpoint** : /admin/metrics avec métriques intégrées
-- [ ] **Performance Monitoring** : Temps de réponse et erreurs
+#### ✅ **Milestone 2.4 : Cache L1 Mémoire & Circuit Breaker**
+- [x] **LRU Cache** : Cache mémoire avec TTL (outils 10min, réponses 1min)
+- [x] **Circuit Breaker** : Protection avec états CLOSED/OPEN/HALF_OPEN
+- [x] **Retry Logic** : Retry automatique avec backoff exponentiel
+- [x] **Metrics Endpoint** : /admin/metrics avec métriques complètes
+- [x] **Performance Monitoring** : Surveillance temps réponse et erreurs
+- [x] **Auto Cleanup** : Nettoyage cache automatique toutes les 5 minutes
+
+**📦 Livré** : Module cache_manager.py complet (commit 8ae08bc)
 
 ---
 
-### **PHASE 3.1 : AUTHENTIFICATION** 🔐 **À FAIRE**
-**État : ⏳ Planifié**
+### **PHASE 3.1 : AUTHENTIFICATION** ✅ **TERMINÉ**
+**État : ✅ Complété**
 
-#### 🎯 **Milestone 3.1 : Système d'authentification sécurisé**
-- [ ] **User Database** : Table users avec champs (id, username, email, password_hash, created_at, is_admin)
-- [ ] **Sessions Database** : Table sessions avec JWT tokens et expiration
-- [ ] **Password Hashing** : Hachage bcrypt sécurisé des mots de passe
-- [ ] **JWT Management** : Génération et validation tokens JWT
-- [ ] **Middleware Auth** : Protection automatique des endpoints dashboard
+#### ✅ **Milestone 3.1 : Système d'authentification sécurisé**
+- [x] **User Database** : Tables users et user_sessions avec tous les champs
+- [x] **Sessions Database** : Gestion JWT avec refresh tokens
+- [x] **Password Hashing** : Hachage PBKDF2-HMAC-SHA256 sécurisé (100k itérations)
+- [x] **JWT Management** : Tokens access (24h) et refresh (30 jours)
+- [x] **Middleware Auth** : Protection endpoints avec dependencies FastAPI
+- [x] **Security Features** : Protection brute force, verrouillage compte
+- [x] **Admin Default** : Utilisateur admin/Admin123! créé automatiquement
 
-#### 🎯 **Endpoints d'authentification**
+#### ✅ **Endpoints d'authentification**
 ```http
-POST /auth/register      # Inscription nouveau utilisateur
-POST /auth/login         # Connexion utilisateur
-POST /auth/logout        # Déconnexion (invalidation token)
-GET  /auth/me           # Informations utilisateur connecté
-PUT  /auth/profile      # Mise à jour profil utilisateur
+POST /auth/register      # ✅ Inscription nouveau utilisateur
+POST /auth/login         # ✅ Connexion utilisateur avec validation
+POST /auth/logout        # ✅ Déconnexion (révocation session)
+POST /auth/refresh       # ✅ Rafraîchissement token
+GET  /auth/me           # ✅ Informations utilisateur connecté
+GET  /auth/sessions     # ✅ Sessions actives utilisateur
 ```
 
+**📦 Livré** : Module auth_manager.py complet avec sécurité avancée
+
 ---
 
-### **PHASE 3.2 : CONFIGURATION HOME ASSISTANT** ⚙️ **À FAIRE**
-**État : ⏳ Planifié**
+### **PHASE 3.2 : CONFIGURATION HOME ASSISTANT** ⚙️ **EN COURS**
+**État : 🔄 En développement**
 
 #### 🎯 **Milestone 3.2 : Gestion configuration HA par utilisateur**
 - [ ] **Config Database** : Table user_configs (user_id, ha_url, ha_token_encrypted, domains_allowed)

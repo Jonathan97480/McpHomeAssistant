@@ -143,6 +143,43 @@ class DatabaseManager:
             )
         """)
         
+        # Tables d'authentification
+        # Table des utilisateurs
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                full_name TEXT,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'user',
+                is_active BOOLEAN DEFAULT 1,
+                failed_login_attempts INTEGER DEFAULT 0,
+                locked_until DATETIME,
+                last_login DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Table des sessions utilisateur
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                access_token TEXT UNIQUE NOT NULL,
+                refresh_token TEXT UNIQUE NOT NULL,
+                access_token_expires DATETIME NOT NULL,
+                refresh_token_expires DATETIME NOT NULL,
+                user_agent TEXT,
+                ip_address TEXT,
+                is_active BOOLEAN DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            )
+        """)
+        
         self.connection.commit()
     
     async def _create_indexes(self):
@@ -157,7 +194,16 @@ class DatabaseManager:
             "CREATE INDEX IF NOT EXISTS idx_requests_endpoint ON requests(endpoint)",
             "CREATE INDEX IF NOT EXISTS idx_errors_timestamp ON errors(timestamp)",
             "CREATE INDEX IF NOT EXISTS idx_errors_type ON errors(error_type)",
-            "CREATE INDEX IF NOT EXISTS idx_stats_date ON stats(date)"
+            "CREATE INDEX IF NOT EXISTS idx_stats_date ON stats(date)",
+            # Index pour l'authentification
+            "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)",
+            "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
+            "CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active)",
+            "CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON user_sessions(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_sessions_access_token ON user_sessions(access_token)",
+            "CREATE INDEX IF NOT EXISTS idx_sessions_refresh_token ON user_sessions(refresh_token)",
+            "CREATE INDEX IF NOT EXISTS idx_sessions_is_active ON user_sessions(is_active)",
+            "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON user_sessions(access_token_expires)"
         ]
         
         for index_sql in indexes:
@@ -373,6 +419,61 @@ class DatabaseManager:
             self.connection.close()
             self.connection = None
             logging.info("🔌 Connexion BDD fermée")
+    
+    async def fetch_one(self, query: str, params: tuple = ()):
+        """Exécute une requête et retourne une seule ligne"""
+        try:
+            # Activer row_factory pour obtenir des dictionnaires
+            self.connection.row_factory = sqlite3.Row
+            cursor = self.connection.cursor()
+            cursor.execute(query, params)
+            result = cursor.fetchone()
+            
+            if result:
+                # Convertir Row en dictionnaire
+                return dict(result)
+            return None
+        except Exception as e:
+            logging.error(f"❌ Erreur fetch_one: {e}")
+            return None
+        finally:
+            # Remettre row_factory par défaut
+            self.connection.row_factory = None
+    
+    async def fetch_all(self, query: str, params: tuple = ()):
+        """Exécute une requête et retourne toutes les lignes"""
+        try:
+            # Activer row_factory pour obtenir des dictionnaires
+            self.connection.row_factory = sqlite3.Row
+            cursor = self.connection.cursor()
+            cursor.execute(query, params)
+            results = cursor.fetchall()
+            
+            # Convertir chaque Row en dictionnaire
+            return [dict(row) for row in results]
+        except Exception as e:
+            logging.error(f"❌ Erreur fetch_all: {e}")
+            return []
+        finally:
+            # Remettre row_factory par défaut
+            self.connection.row_factory = None
+    
+    async def execute(self, query: str, params: tuple = ()):
+        """Exécute une requête sans retour"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, params)
+            self.connection.commit()
+            
+            # Si c'est un INSERT, retourner l'ID du dernier insert
+            if query.strip().upper().startswith('INSERT'):
+                return cursor.lastrowid
+            else:
+                return cursor.rowcount
+        except Exception as e:
+            logging.error(f"❌ Erreur execute: {e}")
+            self.connection.rollback()
+            return 0
 
 
 class DailyLogManager:
