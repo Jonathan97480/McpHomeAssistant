@@ -437,14 +437,14 @@ class MCPDashboard {
                 case '/admin':
                     templateUrl = '/api/templates/admin';
                     break;
+                case '/profile':
+                    templateUrl = '/api/templates/profile';
+                    break;
                 default:
                     templateUrl = '/api/templates/dashboard-overview';
             }
 
             const response = await fetch(templateUrl);
-            if (!response.ok) {
-                throw new Error(`Erreur ${response.status}: ${response.statusText}`);
-            }
 
             const html = await response.text();
             content.innerHTML = html;
@@ -454,6 +454,11 @@ class MCPDashboard {
 
             // Charger les données spécifiques à la page
             await this.loadPageData(path);
+
+            // Initialiser les événements spécifiques à la page profile
+            if (path === '/profile' && window.initProfileEvents) {
+                window.initProfileEvents();
+            }
 
             this.currentPage = path.replace('/', '') || 'dashboard';
 
@@ -481,7 +486,8 @@ class MCPDashboard {
             '/config': 'Configuration',
             '/tools': 'Outils MCP',
             '/logs': 'Logs système',
-            '/admin': 'Administration'
+            '/admin': 'Administration',
+            '/profile': 'Profil utilisateur'
         };
         return titles[path] || 'Dashboard';
     }
@@ -1399,3 +1405,266 @@ function getToastIcon(type) {
     };
     return icons[type] || 'ℹ️';
 }
+
+// Fonctions pour la gestion du profil utilisateur
+window.showTab = function (tabName) {
+    // Masquer tous les contenus
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+
+    // Désactiver tous les onglets
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+
+    // Activer l'onglet et le contenu sélectionnés
+    const targetContent = document.getElementById(tabName);
+    const targetTab = event.target;
+
+    if (targetContent) targetContent.classList.add('active');
+    if (targetTab) targetTab.classList.add('active');
+};
+
+window.loadTokens = async function () {
+    try {
+        const response = await fetch('/api/tokens', {
+            headers: {
+                'Authorization': `Bearer ${window.dashboard ? window.dashboard.token : localStorage.getItem('mcp_token')}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            window.displayTokens(data.tokens);
+        }
+    } catch (error) {
+        console.error('Erreur chargement tokens:', error);
+    }
+};
+
+window.displayTokens = function (tokens) {
+    const tokensList = document.getElementById('tokensList');
+
+    if (!tokensList) return;
+
+    if (tokens.length === 0) {
+        tokensList.innerHTML = '<p>Aucun token API généré.</p>';
+        return;
+    }
+
+    tokensList.innerHTML = tokens.map(token => `
+        <div class="token-item">
+            <div class="token-name">${token.name}</div>
+            <div class="token-info">
+                <div>
+                    <span class="token-status ${token.is_active ? 'active' : 'expired'}">
+                        ${token.is_active ? 'Actif' : 'Révoqué'}
+                    </span>
+                    <span style="margin-left: 10px;">
+                        Créé le ${new Date(token.created_at).toLocaleDateString('fr-FR')}
+                    </span>
+                    ${token.expires_at ? `<span style="margin-left: 10px;">Expire le ${new Date(token.expires_at).toLocaleDateString('fr-FR')}</span>` : ''}
+                    ${token.last_used ? `<span style="margin-left: 10px;">Dernière utilisation: ${new Date(token.last_used).toLocaleDateString('fr-FR')}</span>` : ''}
+                </div>
+                <div>
+                    ${token.is_active ? `<button class="btn-danger" onclick="revokeToken(${token.id})">Révoquer</button>` : ''}
+                </div>
+            </div>
+        </div>
+    `).join('');
+};
+
+window.showGenerateTokenModal = function () {
+    const modal = document.getElementById('generateTokenModal');
+    if (modal) modal.style.display = 'block';
+};
+
+window.closeGenerateTokenModal = function () {
+    const modal = document.getElementById('generateTokenModal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.closeTokenDisplayModal = function () {
+    const modal = document.getElementById('tokenDisplayModal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.copyToken = function () {
+    const tokenValue = document.getElementById('newTokenValue');
+    if (!tokenValue) return;
+
+    const token = tokenValue.textContent;
+    navigator.clipboard.writeText(token).then(() => {
+        const button = document.querySelector('#tokenDisplayModal .copy-btn');
+        if (button) {
+            button.textContent = 'Copié !';
+            setTimeout(() => {
+                button.textContent = 'Copier';
+            }, 2000);
+        }
+    });
+};
+
+window.revokeToken = async function (tokenId) {
+    if (!confirm('Êtes-vous sûr de vouloir révoquer ce token ? Cette action est irréversible.')) return;
+
+    try {
+        const response = await fetch(`/api/tokens/${tokenId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${window.dashboard ? window.dashboard.token : localStorage.getItem('mcp_token')}`
+            }
+        });
+
+        if (response.ok) {
+            window.loadTokens(); // Recharger la liste
+        } else {
+            alert('Erreur lors de la révocation du token');
+        }
+    } catch (error) {
+        alert('Erreur lors de la révocation du token');
+    }
+};
+
+// Initialisation des événements du profil quand le contenu est chargé
+window.initProfileEvents = function () {
+    const generateTokenForm = document.getElementById('generateTokenForm');
+    if (generateTokenForm) {
+        generateTokenForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const tokenName = document.getElementById('tokenName').value;
+            const tokenExpiry = document.getElementById('tokenExpiry').value;
+
+            try {
+                const response = await fetch('/api/tokens/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${window.dashboard ? window.dashboard.token : localStorage.getItem('mcp_token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        token_name: tokenName,
+                        expires_days: parseInt(tokenExpiry)
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // Afficher le token généré
+                    const newTokenValue = document.getElementById('newTokenValue');
+                    const newTokenExpiry = document.getElementById('newTokenExpiry');
+
+                    if (newTokenValue) newTokenValue.textContent = data.token;
+                    if (newTokenExpiry) newTokenExpiry.textContent = new Date(data.expires_at).toLocaleDateString('fr-FR');
+
+                    window.closeGenerateTokenModal();
+                    const tokenDisplayModal = document.getElementById('tokenDisplayModal');
+                    if (tokenDisplayModal) tokenDisplayModal.style.display = 'block';
+
+                    // Recharger la liste
+                    window.loadTokens();
+                } else {
+                    const error = await response.json();
+                    alert('Erreur: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Erreur lors de la génération du token');
+            }
+        });
+    }
+
+    // Charger les tokens au démarrage
+    window.loadTokens();
+    window.loadStats();
+    window.initPasswordForm();
+    window.initModalHandlers();
+};
+
+// Fonctions supplémentaires pour le profil
+window.loadStats = async function () {
+    try {
+        // Nombre de tokens actifs
+        const tokensResponse = await fetch('/api/tokens', {
+            headers: {
+                'Authorization': `Bearer ${window.dashboard ? window.dashboard.token : localStorage.getItem('mcp_token')}`
+            }
+        });
+
+        if (tokensResponse.ok) {
+            const tokensData = await tokensResponse.json();
+            const activeTokens = tokensData.tokens.filter(t => t.is_active).length;
+            const totalTokensElement = document.getElementById('totalTokens');
+            if (totalTokensElement) totalTokensElement.textContent = activeTokens;
+        }
+
+        // Autres statistiques à implémenter
+        const totalRequestsElement = document.getElementById('totalRequests');
+        const lastActivityElement = document.getElementById('lastActivity');
+        if (totalRequestsElement) totalRequestsElement.textContent = '-';
+        if (lastActivityElement) lastActivityElement.textContent = '-';
+
+    } catch (error) {
+        console.error('Erreur chargement statistiques:', error);
+    }
+};
+
+// Gestionnaire pour le formulaire de changement de mot de passe
+window.initPasswordForm = function () {
+    const passwordForm = document.getElementById('passwordForm');
+    if (passwordForm) {
+        passwordForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (newPassword !== confirmPassword) {
+                alert('Les mots de passe ne correspondent pas');
+                return;
+            }
+
+            try {
+                const response = await fetch('/auth/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${window.dashboard ? window.dashboard.token : localStorage.getItem('mcp_token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        current_password: currentPassword,
+                        new_password: newPassword
+                    })
+                });
+
+                if (response.ok) {
+                    alert('Mot de passe changé avec succès');
+                    passwordForm.reset();
+                } else {
+                    const error = await response.json();
+                    alert('Erreur: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Erreur lors du changement de mot de passe');
+            }
+        });
+    }
+};
+
+// Gestionnaire pour fermer les modals en cliquant à l'extérieur
+window.initModalHandlers = function () {
+    window.onclick = function (event) {
+        const generateModal = document.getElementById('generateTokenModal');
+        const displayModal = document.getElementById('tokenDisplayModal');
+
+        if (event.target === generateModal) {
+            window.closeGenerateTokenModal();
+        }
+        if (event.target === displayModal) {
+            window.closeTokenDisplayModal();
+        }
+    };
+};

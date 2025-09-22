@@ -382,14 +382,21 @@ class AuthManager:
         return encoded_jwt
     
     def _create_refresh_token(self, data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
-        """Crée un token de rafraîchissement JWT"""
+        """Crée un token de rafraîchissement JWT avec unicité garantie"""
+        import uuid
+        
         to_encode = data.copy()
         if expires_delta:
             expire = datetime.utcnow() + expires_delta
         else:
             expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         
-        to_encode.update({"exp": expire, "type": "refresh"})
+        # Ajouter un UUID pour garantir l'unicité du token
+        to_encode.update({
+            "exp": expire, 
+            "type": "refresh",
+            "jti": str(uuid.uuid4())  # JSON Web Token ID pour unicité
+        })
         encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
         return encoded_jwt
     

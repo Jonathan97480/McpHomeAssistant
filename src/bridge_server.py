@@ -2339,7 +2339,13 @@ async def admin_page(request: Request):
 async def get_dashboard_overview():
     """Retourne le template de vue d'ensemble du dashboard"""
     try:
-        with open("../web/templates/dashboard_overview.html", "r", encoding="utf-8") as f:
+        # Calculer le chemin absolu du template
+        import os
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        WEB_DIR = os.path.join(BASE_DIR, "web")
+        template_path = os.path.join(WEB_DIR, "templates", "dashboard_overview.html")
+        
+        with open(template_path, "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Template non trouvé")
@@ -2348,7 +2354,12 @@ async def get_dashboard_overview():
 async def get_permissions_template():
     """Retourne le template de gestion des permissions"""
     try:
-        with open("../web/templates/permissions.html", "r", encoding="utf-8") as f:
+        import os
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        WEB_DIR = os.path.join(BASE_DIR, "web")
+        template_path = os.path.join(WEB_DIR, "templates", "permissions.html")
+        
+        with open(template_path, "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Template non trouvé")
@@ -2357,7 +2368,12 @@ async def get_permissions_template():
 async def get_config_template():
     """Retourne le template de configuration"""
     try:
-        with open("../web/templates/config.html", "r", encoding="utf-8") as f:
+        import os
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        WEB_DIR = os.path.join(BASE_DIR, "web")
+        template_path = os.path.join(WEB_DIR, "templates", "config.html")
+        
+        with open(template_path, "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Template non trouvé")
@@ -2366,7 +2382,12 @@ async def get_config_template():
 async def get_tools_template():
     """Retourne le template des outils MCP"""
     try:
-        with open("../web/templates/tools.html", "r", encoding="utf-8") as f:
+        import os
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        WEB_DIR = os.path.join(BASE_DIR, "web")
+        template_path = os.path.join(WEB_DIR, "templates", "tools.html")
+        
+        with open(template_path, "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Template non trouvé")
@@ -2375,7 +2396,12 @@ async def get_tools_template():
 async def get_logs_template():
     """Retourne le template des logs"""
     try:
-        with open("../web/templates/logs.html", "r", encoding="utf-8") as f:
+        import os
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        WEB_DIR = os.path.join(BASE_DIR, "web")
+        template_path = os.path.join(WEB_DIR, "templates", "logs.html")
+        
+        with open(template_path, "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Template non trouvé")
@@ -2396,10 +2422,41 @@ async def profile_page(request: Request, current_user: UserResponse = Depends(ge
 async def get_admin_template():
     """Retourne le template d'administration"""
     try:
-        with open("../web/templates/admin.html", "r", encoding="utf-8") as f:
+        import os
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        WEB_DIR = os.path.join(BASE_DIR, "web")
+        template_path = os.path.join(WEB_DIR, "templates", "admin.html")
+        
+        with open(template_path, "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Template non trouvé")
+
+@app.get("/api/templates/profile", response_class=HTMLResponse)
+async def get_profile_template():
+    """Retourne le template de profil utilisateur"""
+    try:
+        import os
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        WEB_DIR = os.path.join(BASE_DIR, "web")
+        template_path = os.path.join(WEB_DIR, "templates", "profile.html")
+        
+        with open(template_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            # Remplacer les variables Jinja2 par des valeurs par défaut ou vides
+            # puisque cette route ne gère pas l'authentification
+            content = content.replace('{{ user.username }}', 'Utilisateur')
+            content = content.replace('{{ user.full_name or user.username }}', 'Utilisateur')
+            content = content.replace('{{ user.email }}', 'email@example.com')
+            content = content.replace('{{ user.role.value }}', 'user')
+            content = content.replace('{{ user.created_at.strftime(\'%d/%m/%Y\') }}', '01/01/2024')
+            content = content.replace('{{ user.last_login.strftime(\'%d/%m/%Y à %H:%M\') if user.last_login else \'Jamais\' }}', 'Jamais')
+            content = content.replace('{{ \'active\' if user.is_active else \'expired\' }}', 'active')
+            content = content.replace('{{ \'Actif\' if user.is_active else \'Inactif\' }}', 'Actif')
+            return HTMLResponse(content)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Template non trouvé")
+
 
 # API pour les métriques du dashboard
 @app.get("/api/metrics")
@@ -2890,7 +2947,7 @@ async def test_homeassistant_config(config: dict):
                     else:
                         return {
                             "success": False,
-                            "message": f"Erreur HTTP {response.status}: {await response.text()}"
+                            "message": "Échec de la connexion"
                         }
         except asyncio.TimeoutError:
             return {
@@ -3288,7 +3345,6 @@ async def get_users():
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
-        logger.error(f"Erreur lors de la récupération des utilisateurs: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur serveur: {str(e)}")
 
 @app.get("/api/permissions")
@@ -3492,70 +3548,85 @@ async def maintenance_action(action: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# WebSocket endpoint pour les connexions en temps réel
+# WebSocket endpoint pour les connexions temps réel
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    
-    # Envoyer un message de bienvenue en JSON
-    welcome_message = {
-        "type": "welcome",
-        "message": "Connexion WebSocket établie",
-        "timestamp": time.time()
-    }
-    await websocket.send_text(json.dumps(welcome_message))
-    
+
+    # Attendre le message d'authentification
     try:
-        while True:
-            # Attendre les messages du client
-            data = await websocket.receive_text()
-            
+        auth_message = await websocket.receive_json()
+        if auth_message.get('type') != 'auth':
+            await websocket.close(code=1008)  # Policy violation
+            return
+
+        token = auth_message.get('token')
+        if not token:
+            await websocket.close(code=1008)  # Policy violation
+            return
+
+        # Vérifier le token (JWT ou API token)
+        user_data = None
+
+        # Essayer d'abord comme token API personnalisé
+        if token.startswith('mcp_'):
+            token_data = api_token_manager.validate_token(token)
+            if token_data:
+                user_data = {
+                    'id': token_data['user_id'],
+                    'username': token_data['username'],
+                    'role': token_data['role']
+                }
+
+        # Si ce n'est pas un token API, essayer comme JWT
+        if not user_data:
             try:
-                # Essayer de parser le message comme JSON
-                message = json.loads(data)
-                
-                # Préparer la réponse en JSON
-                response = {
-                    "type": "response",
-                    "original_message": message,
-                    "timestamp": time.time(),
-                    "status": "received"
+                # Pour JWT, on utilise la même logique que get_current_user
+                credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+                user_response = await get_current_user(credentials)
+                user_data = {
+                    'id': user_response.id,
+                    'username': user_response.username,
+                    'role': user_response.role
                 }
-                
-                # Traiter différents types de messages
-                if message.get("type") == "ping":
-                    response["type"] = "pong"
-                elif message.get("type") == "status_request":
-                    response["type"] = "status"
-                    response["data"] = {
-                        "server": "running",
-                        "connections": 1,
-                        "uptime": time.time()
-                    }
-                
-                await websocket.send_text(json.dumps(response))
-                
-            except json.JSONDecodeError:
-                # Si ce n'est pas du JSON, traiter comme texte simple
-                response = {
-                    "type": "echo",
-                    "message": data,
-                    "timestamp": time.time()
-                }
-                await websocket.send_text(json.dumps(response))
-            
-    except WebSocketDisconnect:
-        print("Client WebSocket déconnecté")
+            except:
+                pass
+
+        if not user_data:
+            await websocket.close(code=1008)  # Policy violation
+            return
+
+        # Authentification réussie
+        await websocket.send_json({
+            "type": "auth_success",
+            "message": "Connexion WebSocket établie",
+            "user": user_data['username'],
+            "timestamp": datetime.now().isoformat()
+        })
+
+        # Boucle principale pour maintenir la connexion
+        while True:
+            try:
+                # Attendre les messages du client (ping/heartbeat)
+                data = await websocket.receive_json()
+
+                # Répondre aux pings
+                if data.get('type') == 'ping':
+                    await websocket.send_json({
+                        "type": "pong",
+                        "timestamp": datetime.now().isoformat()
+                    })
+
+            except WebSocketDisconnect:
+                break
+            except Exception as e:
+                # Log l'erreur mais continuer
+                print(f"Erreur WebSocket: {e}")
+                break
+
     except Exception as e:
-        print(f"Erreur WebSocket: {e}")
-        await websocket.close()
-
-
-if __name__ == "__main__":
-    uvicorn.run(
-        "bridge_server:app",
-        host="0.0.0.0",
-        port=8080,
-        reload=False,  # Désactiver reload pour éviter les conflits
-        log_level="info"
-    )
+        print(f"Erreur lors de l'authentification WebSocket: {e}")
+        try:
+            await websocket.close(code=1008)
+        except:
+            pass
