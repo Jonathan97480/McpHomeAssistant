@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profil Utilisateur - MCP Bridge</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <style>
+        .profile-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .profile-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .profile-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            margin: 0 auto 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+        }
+        
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 5px;
+            margin-bottom: 30px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 12px 20px;
+            border-radius: 8px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .tab.active {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .tab:hover:not(.active) {
+            background: rgba(102, 126, 234, 0.1);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .profile-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        
+        .token-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            position: relative;
+        }
+        
+        .token-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .token-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .token-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .token-status.active {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .token-status.expired {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .token-value {
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+            margin: 10px 0;
+            word-break: break-all;
+            position: relative;
+        }
+        
+        .copy-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 15px;
+            width: 80%;
+            max-width: 500px;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: black;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <h2>🌉 MCP Bridge - Profil</h2>
+            </div>
+            <div class="nav-links">
+                <a href="/dashboard" class="nav-link">Dashboard</a>
+                <a href="/config" class="nav-link">Configuration</a>
+                <a href="/permissions" class="nav-link">Permissions</a>
+                <span class="nav-user">{{ user.username }}</span>
+                <a href="/auth/logout" class="nav-link">Déconnexion</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="profile-container">
+        <!-- Header du profil -->
+        <div class="profile-header">
+            <div class="profile-avatar">
+                {{ user.username[0].upper() }}
+            </div>
+            <h1>{{ user.full_name or user.username }}</h1>
+            <p>{{ user.email }}</p>
+            <p class="user-role">{{ user.role.value }}</p>
+            <small>Membre depuis {{ user.created_at.strftime('%d/%m/%Y') }}</small>
+        </div>
+
+        <!-- Onglets -->
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('general')">Informations générales</button>
+            <button class="tab" onclick="showTab('security')">Sécurité</button>
+            <button class="tab" onclick="showTab('tokens')">Tokens API</button>
+            <button class="tab" onclick="showTab('stats')">Statistiques</button>
+        </div>
+
+        <!-- Contenu des onglets -->
+        
+        <!-- Onglet Informations générales -->
+        <div id="general" class="tab-content active">
+            <div class="profile-card">
+                <h3>Informations du profil</h3>
+                <form id="profileForm">
+                    <div class="form-group">
+                        <label for="username">Nom d'utilisateur</label>
+                        <input type="text" id="username" class="form-control" value="{{ user.username }}" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" class="form-control" value="{{ user.email }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="fullName">Nom complet</label>
+                        <input type="text" id="fullName" class="form-control" value="{{ user.full_name or '' }}">
+                    </div>
+                    <button type="submit" class="btn-primary">Mettre à jour le profil</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Onglet Sécurité -->
+        <div id="security" class="tab-content">
+            <div class="profile-card">
+                <h3>Changer le mot de passe</h3>
+                <form id="passwordForm">
+                    <div class="form-group">
+                        <label for="currentPassword">Mot de passe actuel</label>
+                        <input type="password" id="currentPassword" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">Nouveau mot de passe</label>
+                        <input type="password" id="newPassword" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirmer le nouveau mot de passe</label>
+                        <input type="password" id="confirmPassword" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn-primary">Changer le mot de passe</button>
+                </form>
+            </div>
+            
+            <div class="profile-card">
+                <h3>Paramètres de sécurité</h3>
+                <p>Dernière connexion : {{ user.last_login.strftime('%d/%m/%Y à %H:%M') if user.last_login else 'Jamais' }}</p>
+                <p>Compte créé : {{ user.created_at.strftime('%d/%m/%Y à %H:%M') }}</p>
+                <p>Statut : <span class="token-status {{ 'active' if user.is_active else 'expired' }}">{{ 'Actif' if user.is_active else 'Inactif' }}</span></p>
+            </div>
+        </div>
+
+        <!-- Onglet Tokens API -->
+        <div id="tokens" class="tab-content">
+            <div class="profile-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3>Mes tokens API</h3>
+                    <button class="btn-primary" onclick="showGenerateTokenModal()">Générer un nouveau token</button>
+                </div>
+                
+                <div id="tokensList">
+                    <!-- Les tokens seront chargés ici via JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Onglet Statistiques -->
+        <div id="stats" class="tab-content">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalTokens">-</div>
+                    <div class="stat-label">Tokens actifs</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalRequests">-</div>
+                    <div class="stat-label">Requêtes totales</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="lastActivity">-</div>
+                    <div class="stat-label">Dernière activité</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal génération token -->
+    <div id="generateTokenModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeGenerateTokenModal()">&times;</span>
+            <h3>Générer un nouveau token API</h3>
+            <form id="generateTokenForm">
+                <div class="form-group">
+                    <label for="tokenName">Nom du token</label>
+                    <input type="text" id="tokenName" class="form-control" value="LM Studio" required>
+                </div>
+                <div class="form-group">
+                    <label for="tokenExpiry">Durée de validité (jours)</label>
+                    <select id="tokenExpiry" class="form-control">
+                        <option value="30">30 jours</option>
+                        <option value="90">90 jours</option>
+                        <option value="365" selected>1 an</option>
+                        <option value="730">2 ans</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-primary">Générer le token</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal affichage token généré -->
+    <div id="tokenDisplayModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeTokenDisplayModal()">&times;</span>
+            <h3>Token généré avec succès</h3>
+            <div class="alert alert-success">
+                <strong>Important :</strong> Ce token ne sera affiché qu'une seule fois. Assurez-vous de le copier maintenant.
+            </div>
+            <div class="token-value">
+                <span id="newTokenValue"></span>
+                <button class="copy-btn" onclick="copyToken()">Copier</button>
+            </div>
+            <p><strong>Expire le :</strong> <span id="newTokenExpiry"></span></p>
+            <button class="btn-primary" onclick="closeTokenDisplayModal()">J'ai copié le token</button>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        // Variables globales
+        let userToken = localStorage.getItem('token');
+        let currentUser = null;
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTokens();
+            loadStats();
+        });
+
+        // Gestion des onglets
+        function showTab(tabName) {
+            // Masquer tous les contenus
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Désactiver tous les onglets
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Activer l'onglet et le contenu sélectionnés
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // Chargement des tokens
+        async function loadTokens() {
+            try {
+                const response = await fetch('/api/tokens', {
+                    headers: {
+                        'Authorization': `Bearer ${userToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    displayTokens(data.tokens);
+                }
+            } catch (error) {
+                console.error('Erreur chargement tokens:', error);
+            }
+        }
+
+        // Affichage des tokens
+        function displayTokens(tokens) {
+            const tokensList = document.getElementById('tokensList');
+            
+            if (tokens.length === 0) {
+                tokensList.innerHTML = '<p>Aucun token API généré.</p>';
+                return;
+            }
+            
+            tokensList.innerHTML = tokens.map(token => `
+                <div class="token-item">
+                    <div class="token-name">${token.name}</div>
+                    <div class="token-info">
+                        <div>
+                            <span class="token-status ${token.is_active ? 'active' : 'expired'}">
+                                ${token.is_active ? 'Actif' : 'Révoqué'}
+                            </span>
+                            <span style="margin-left: 10px;">
+                                Créé le ${new Date(token.created_at).toLocaleDateString('fr-FR')}
+                            </span>
+                            ${token.expires_at ? `<span style="margin-left: 10px;">Expire le ${new Date(token.expires_at).toLocaleDateString('fr-FR')}</span>` : ''}
+                            ${token.last_used ? `<span style="margin-left: 10px;">Dernière utilisation: ${new Date(token.last_used).toLocaleDateString('fr-FR')}</span>` : ''}
+                        </div>
+                        <div>
+                            ${token.is_active ? `<button class="btn-danger" onclick="revokeToken(${token.id})">Révoquer</button>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Génération de token
+        function showGenerateTokenModal() {
+            document.getElementById('generateTokenModal').style.display = 'block';
+        }
+
+        function closeGenerateTokenModal() {
+            document.getElementById('generateTokenModal').style.display = 'none';
+        }
+
+        function closeTokenDisplayModal() {
+            document.getElementById('tokenDisplayModal').style.display = 'none';
+        }
+
+        // Formulaire génération token
+        document.getElementById('generateTokenForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const tokenName = document.getElementById('tokenName').value;
+            const tokenExpiry = document.getElementById('tokenExpiry').value;
+            
+            try {
+                const response = await fetch('/api/tokens/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${userToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        token_name: tokenName,
+                        expires_days: parseInt(tokenExpiry)
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Afficher le token généré
+                    document.getElementById('newTokenValue').textContent = data.token;
+                    document.getElementById('newTokenExpiry').textContent = new Date(data.expires_at).toLocaleDateString('fr-FR');
+                    
+                    closeGenerateTokenModal();
+                    document.getElementById('tokenDisplayModal').style.display = 'block';
+                    
+                    // Recharger la liste
+                    loadTokens();
+                } else {
+                    const error = await response.json();
+                    alert('Erreur: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Erreur lors de la génération du token');
+            }
+        });
+
+        // Copier token
+        function copyToken() {
+            const tokenValue = document.getElementById('newTokenValue').textContent;
+            navigator.clipboard.writeText(tokenValue).then(() => {
+                const button = document.querySelector('#tokenDisplayModal .copy-btn');
+                button.textContent = 'Copié !';
+                setTimeout(() => {
+                    button.textContent = 'Copier';
+                }, 2000);
+            });
+        }
+
+        // Révoquer token
+        async function revokeToken(tokenId) {
+            if (!confirm('Êtes-vous sûr de vouloir révoquer ce token ? Cette action est irréversible.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/tokens/${tokenId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${userToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    loadTokens(); // Recharger la liste
+                } else {
+                    alert('Erreur lors de la révocation du token');
+                }
+            } catch (error) {
+                alert('Erreur lors de la révocation du token');
+            }
+        }
+
+        // Changement de mot de passe
+        document.getElementById('passwordForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (newPassword !== confirmPassword) {
+                alert('Les mots de passe ne correspondent pas');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/auth/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${userToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        current_password: currentPassword,
+                        new_password: newPassword
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('Mot de passe changé avec succès');
+                    document.getElementById('passwordForm').reset();
+                } else {
+                    const error = await response.json();
+                    alert('Erreur: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Erreur lors du changement de mot de passe');
+            }
+        });
+
+        // Chargement des statistiques
+        async function loadStats() {
+            try {
+                // Nombre de tokens actifs
+                const tokensResponse = await fetch('/api/tokens', {
+                    headers: { 'Authorization': `Bearer ${userToken}` }
+                });
+                
+                if (tokensResponse.ok) {
+                    const tokensData = await tokensResponse.json();
+                    const activeTokens = tokensData.tokens.filter(t => t.is_active).length;
+                    document.getElementById('totalTokens').textContent = activeTokens;
+                }
+                
+                // Autres statistiques à implémenter
+                document.getElementById('totalRequests').textContent = '-';
+                document.getElementById('lastActivity').textContent = '-';
+                
+            } catch (error) {
+                console.error('Erreur chargement statistiques:', error);
+            }
+        }
+
+        // Fermer les modals en cliquant à l'extérieur
+        window.onclick = function(event) {
+            const generateModal = document.getElementById('generateTokenModal');
+            const displayModal = document.getElementById('tokenDisplayModal');
+            
+            if (event.target === generateModal) {
+                closeGenerateTokenModal();
+            }
+            if (event.target === displayModal) {
+                closeTokenDisplayModal();
+            }
+        }
+    </script>
+</body>
+</html>

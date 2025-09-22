@@ -1,0 +1,4 @@
+Token API pour utilisateur beroute
+Généré le: 2026-09-22T15:46:58.905852
+Token: mcp_PX6orkVhfuojvZfoEHS4kZDex9fwyaYh
+ID: 1

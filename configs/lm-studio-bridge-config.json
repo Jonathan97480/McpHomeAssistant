@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "homeassistant-bridge": {
+      "name": "Home Assistant MCP Bridge Server",
+      "command": "node",
+      "args": ["-e", "console.log('MCP Bridge Server')"],
+      "description": "Bridge HTTP vers Home Assistant via serveur MCP avec tokens API personnalisés",
+      "env": {
+        "BRIDGE_URL": "http://localhost:8080",
+        "HASS_URL": "http://raspberrypi:8123",
+        "API_TOKEN": "mcp_VOTRE_TOKEN_API_PERSONNALISE_ICI"
+      },
+      "timeout": 30,
+      "autoStart": false
+    }
+  }
+}

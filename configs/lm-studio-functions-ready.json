@@ -1,0 +1,140 @@
+[
+  {
+    "name": "get_homeassistant_entities",
+    "description": "Récupère toutes les entités Home Assistant disponibles (42 périphériques détectés)",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "domain": {
+          "type": "string",
+          "description": "Filtrer par domaine (optionnel): sensor, switch, light, media_player",
+          "enum": ["sensor", "switch", "light", "media_player", "person", "binary_sensor", "number"]
+        }
+      }
+    },
+    "endpoint": {
+      "method": "POST",
+      "url": "http://localhost:8080/mcp/tools/call",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-Session-ID": "session-lm-studio"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+          "name": "get_entities",
+          "arguments": {
+            "format": "json"
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "get_entity_state",
+    "description": "Récupère l'état détaillé d'une entité Home Assistant spécifique",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "ID complet de l'entité (ex: sensor.kws_306wf_energie_totale pour la consommation totale)",
+          "examples": [
+            "sensor.kws_306wf_energie_totale",
+            "switch.ampli_home_cinema_et_lecteur_blu_ray_prise",
+            "switch.bureau_prise_1",
+            "media_player.salle_cinema",
+            "person.jonathan_gauvin"
+          ]
+        }
+      },
+      "required": ["entity_id"]
+    },
+    "endpoint": {
+      "method": "POST",
+      "url": "http://localhost:8080/mcp/tools/call",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-Session-ID": "session-lm-studio"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+          "name": "get_state",
+          "arguments": {
+            "entity_id": "{{entity_id}}"
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "call_homeassistant_service",
+    "description": "Contrôle un service Home Assistant (allumer/éteindre prises, lumières, etc.)",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "domain": {
+          "type": "string",
+          "description": "Domaine du service",
+          "enum": ["switch", "light", "media_player", "climate", "cover"],
+          "examples": ["switch", "light"]
+        },
+        "service": {
+          "type": "string",
+          "description": "Service à appeler",
+          "enum": ["turn_on", "turn_off", "toggle"],
+          "examples": ["turn_on", "turn_off", "toggle"]
+        },
+        "entity_id": {
+          "type": "string",
+          "description": "ID de l'entité à contrôler",
+          "examples": [
+            "switch.ampli_home_cinema_et_lecteur_blu_ray_prise",
+            "switch.bureau_prise_1",
+            "switch.frigidaire_micro_ondes_prise_1",
+            "switch.plaque_electrique_prise_1",
+            "switch.congelateur_prise_1"
+          ]
+        },
+        "service_data": {
+          "type": "object",
+          "description": "Données supplémentaires pour le service (optionnel)",
+          "properties": {
+            "brightness": {
+              "type": "number",
+              "description": "Luminosité pour les lumières (0-255)"
+            }
+          }
+        }
+      },
+      "required": ["domain", "service"]
+    },
+    "endpoint": {
+      "method": "POST",
+      "url": "http://localhost:8080/mcp/tools/call",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-Session-ID": "session-lm-studio"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "name": "call_service",
+          "arguments": {
+            "domain": "{{domain}}",
+            "service": "{{service}}",
+            "entity_id": "{{entity_id}}",
+            "data": "{{service_data}}"
+          }
+        }
+      }
+    }
+  }
+]

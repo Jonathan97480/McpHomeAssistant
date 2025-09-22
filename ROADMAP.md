@@ -238,10 +238,53 @@ PUT  /permissions/defaults       # [ADMIN] Mise à jour permissions par défaut
 
 ---
 
-### **PHASE 3.5 : SÉCURITÉ & PRODUCTION** 🔒 **À FAIRE**
+### **PHASE 3.5 : PROFILS UTILISATEUR & TOKENS API** 🔄 **EN COURS**
+**État : 🔄 En développement**
+
+#### 🔄 **Milestone 3.5.1 : Système de tokens API personnalisés**
+- [x] **API Token Manager** : Gestionnaire tokens API avec hachage sécurisé SHA256
+- [x] **Token Generation** : Génération tokens `mcp_` 32 caractères avec expiration configurable  
+- [x] **Token Validation** : Validation tokens API intégrée au système d'authentification
+- [x] **Database Schema** : Table `api_tokens` avec foreign keys et permissions JSON
+- [x] **Dual Authentication** : Support JWT classique ET tokens API personnalisés
+
+#### 🔄 **Milestone 3.5.2 : Interface profil utilisateur**
+- [ ] **Page Profil** : Interface utilisateur complète pour gestion profil
+- [ ] **Changement Mot de Passe** : Formulaire sécurisé changement password avec validation
+- [ ] **Gestion API Tokens** : Interface création/révocation/liste tokens API
+- [ ] **Token Display** : Affichage sécurisé tokens avec copie one-click
+- [ ] **Security Settings** : Paramètres de sécurité utilisateur (2FA préparé)
+
+#### 🔄 **Milestone 3.5.3 : Endpoints API tokens**
+- [x] **Token Generation API** : `POST /api/tokens/generate` avec paramètres personnalisables
+- [x] **Token Listing API** : `GET /api/tokens` liste tokens utilisateur avec statuts
+- [x] **Token Revocation API** : `DELETE /api/tokens/{id}` révocation sécurisée
+- [ ] **Token Permissions API** : `PUT /api/tokens/{id}/permissions` gestion permissions par token
+- [ ] **Token Analytics API** : `GET /api/tokens/{id}/usage` statistiques d'utilisation
+
+#### 🔄 **Sécurité renforcée tokens API**
+- [x] **Hash Storage** : Stockage hachés SHA256 uniquement (jamais en clair)
+- [x] **Expiration Management** : Gestion expiration automatique avec vérification
+- [x] **Usage Tracking** : Suivi `last_used` pour audit et sécurité
+- [x] **Permission Inheritance** : Héritage permissions utilisateur avec restrictions
+- [ ] **Rate Limiting** : Limitation taux requêtes par token API
+- [ ] **IP Whitelisting** : Restriction IP pour tokens sensibles
+
+#### 🔄 **Dashboard intégration**
+- [ ] **Profile Navigation** : Ajout menu "Profil" dans dashboard
+- [ ] **Profile Page** : Page `/profile` complète avec onglets
+- [ ] **Password Change Form** : Formulaire sécurisé avec validation côté client/serveur
+- [ ] **API Tokens Management** : Interface graphique gestion tokens
+- [ ] **LM Studio Helper** : Assistant configuration LM Studio avec tokens générés
+
+**📦 À livrer** : Interface profil complète + système tokens API sécurisé
+
+---
+
+### **PHASE 3.6 : SÉCURITÉ & PRODUCTION** 🔒 **À FAIRE**
 **État : ⏳ Planifié**
 
-#### 🎯 **Milestone 3.5 : Sécurisation production**
+#### 🎯 **Milestone 3.6 : Sécurisation production**
 - [ ] **Rate Limiting** : Limitation requêtes par utilisateur (100/min par défaut)
 - [ ] **HTTPS Support** : Configuration SSL/TLS recommandée
 - [ ] **Input Validation** : Validation stricte toutes les entrées
@@ -382,9 +425,10 @@ CREATE TABLE default_permissions (
 
 ### **Stratégie de Release Étendue**
 - **Alpha** : ✅ Bridge basique + BDD (Phases 0-2.3) - **TERMINÉ**
-- **Beta** : Cache + Auth + Config HA (Phases 2.4-3.2) - **En cours**
-- **RC** : Permissions + Dashboard (Phases 3.3-3.4) - **Planifié**
-- **Stable** : Sécurité + Production (Phase 3.5) - **Planifié**
+- **Beta** : Cache + Auth + Config HA (Phases 2.4-3.2) - **TERMINÉ**
+- **RC** : Permissions + Dashboard (Phases 3.3-3.4) - **TERMINÉ**
+- **Release** : Profils + API Tokens (Phase 3.5) - **En cours**
+- **Stable** : Sécurité + Production (Phase 3.6) - **Planifié**
 
 ### **Documentation Requise Étendue**
 - [x] API Reference complète ✅ **TERMINÉ**
@@ -417,15 +461,17 @@ CREATE TABLE default_permissions (
 
 ## 📅 **TIMELINE MISE À JOUR**
 
-**Estimation totale : 20-25 jours de développement**
+**Estimation totale : 25-30 jours de développement**
 - ✅ **Phases 0-2.3** : Terminées (Bridge + BDD) - **8 jours**
 - ✅ **Phase 2.4** : Cache & Circuit Breaker - **TERMINÉ**
 - ✅ **Phase 3.1** : Authentification - **TERMINÉ**
 - ✅ **Phase 3.2** : Config Home Assistant - **TERMINÉ**
 - ✅ **Phase 3.3** : Permissions outils - **TERMINÉ**
 - ✅ **Phase 3.4** : Dashboard web - **TERMINÉ** ✨
-- ⏳ **Phase 3.5** : Sécurité production - **2-3 jours**
+- 🔄 **Phase 3.5** : Profils + API Tokens - **EN COURS** 🔑
+- ⏳ **Phase 3.6** : Sécurité production - **2-3 jours**
 
 **✅ Livraison Beta (avec auth)** : TERMINÉ  
 **✅ Livraison RC (avec dashboard)** : TERMINÉ ✨  
-**⏳ Livraison Stable** : Phase 3.5 restante
+**🔄 Livraison Release (avec profils)** : EN COURS 🔑  
+**⏳ Livraison Stable** : Phase 3.6 restante

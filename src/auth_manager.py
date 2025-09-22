@@ -93,12 +93,13 @@ class UserResponse(BaseModel):
     """Modèle de réponse utilisateur (sans mot de passe)"""
     id: int
     username: str
-    email: str
-    full_name: Optional[str]
+    email: str = ""  # Valeur par défaut pour tokens API
+    full_name: Optional[str] = None
     role: UserRole
     is_active: bool
     last_login: Optional[datetime]
     created_at: datetime
+    api_token_auth: Optional[bool] = False  # Indique si authentifié par token API
 
 
 class TokenResponse(BaseModel):
@@ -579,6 +580,23 @@ class AuthManager:
             await db_manager.execute(query, (user_id,))
         except Exception as e:
             logger.error(f"❌ Failed to cleanup all user sessions: {e}")
+    
+    async def change_password(self, user_id: int, new_password: str) -> bool:
+        """Change le mot de passe d'un utilisateur"""
+        try:
+            # Hacher le nouveau mot de passe
+            password_hash = hash_password(new_password)
+            
+            # Mettre à jour en base
+            query = "UPDATE users SET password_hash = ? WHERE id = ?"
+            await db_manager.execute(query, (password_hash, user_id))
+            
+            logger.info(f"🔐 Password updated for user ID: {user_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to change password for user {user_id}: {e}")
+            return False
 
 
 # Instance globale du gestionnaire d'authentification

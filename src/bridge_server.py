@@ -59,6 +59,9 @@ from ha_config_manager import ha_config_manager, HAConfigCreate, HAConfigUpdate,
 from permissions_manager import PermissionsManager, PermissionType
 from permissions_middleware import permissions_middleware
 
+# Import du gestionnaire de tokens API
+from api_token_manager import APITokenManager
+
 # Variables globales pour le serveur MCP
 mcp_server = None
 ha_client = None
@@ -235,49 +238,146 @@ class MockMCPServer:
             raise
     
     async def _execute_tool(self, name: str, args: Dict[str, Any]):
-        """Exécute l'outil (logique métier)"""
-        # Simuler une latence réseau
-        await asyncio.sleep(0.05)
+        """Exécute l'outil (logique métier) avec vraie connexion Home Assistant"""
+        global ha_client
         
-        # Simuler parfois une erreur pour tester le circuit breaker
-        import random
-        if random.random() < 0.03:  # 3% de chance d'erreur
-            raise Exception(f"Simulated error executing {name}")
+        # Vérifier que le client HA est disponible
+        if not ha_client:
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": "❌ Client Home Assistant non initialisé"
+                }],
+                "isError": True
+            }
         
-        if name == "get_entities":
-            domain = args.get("domain", "all")
-            return {
-                "content": [{
-                    "type": "text", 
-                    "text": f"🔧 Mock: Récupération des entités pour le domaine '{domain}'\n\nEntités simulées:\n- light.salon_lamp (état: off)\n- sensor.temperature (état: 22.5°C)\n- switch.tv (état: on)\n- sensor.humidity (état: 45%)"
-                }],
-                "isError": False
-            }
-        elif name == "get_state":
-            entity_id = args.get("entity_id", "unknown")
+        try:
+            if name == "get_entities":
+                domain = args.get("domain", "all")
+                format_type = args.get("format", "text")  # Nouveau paramètre pour le format
+                
+                # Utiliser le vrai client HA
+                async with ha_client:
+                    entities = await ha_client.get_entities()
+                    
+                    # Filtrer par domaine si spécifié
+                    if domain != "all":
+                        entities = [e for e in entities if e.get("entity_id", "").startswith(f"{domain}.")]
+                    
+                    # Si format JSON demandé, retourner les données brutes
+                    if format_type == "json":
+                        return {
+                            "content": [{
+                                "type": "text",
+                                "text": json.dumps(entities, indent=2, ensure_ascii=False)
+                            }],
+                            "isError": False
+                        }
+                    
+                    # Sinon, formater la réponse en texte lisible
+                    entities_text = f"🏠 Entités Home Assistant (domaine: {domain}):\n\n"
+                    for entity in entities[:20]:  # Limiter à 20 entités pour éviter une réponse trop longue
+                        entity_id = entity.get("entity_id", "unknown")
+                        state = entity.get("state", "unknown")
+                        friendly_name = entity.get("attributes", {}).get("friendly_name", entity_id)
+                        entities_text += f"- {entity_id} ({friendly_name}): {state}\n"
+                    
+                    if len(entities) > 20:
+                        entities_text += f"\n... et {len(entities) - 20} autres entités"
+                    
+                    entities_text += f"\n\nTotal: {len(entities)} entités trouvées"
+                    
+                    return {
+                        "content": [{
+                            "type": "text",
+                            "text": entities_text
+                        }],
+                        "isError": False
+                    }
+                    
+            elif name == "get_state":
+                entity_id = args.get("entity_id")
+                if not entity_id:
+                    return {
+                        "content": [{
+                            "type": "text",
+                            "text": "❌ Paramètre entity_id requis"
+                        }],
+                        "isError": True
+                    }
+                
+                async with ha_client:
+                    entity_state = await ha_client.get_entity_state(entity_id)
+                    friendly_name = entity_state.get("attributes", {}).get("friendly_name", entity_id)
+                    state = entity_state.get("state", "unknown")
+                    unit = entity_state.get("attributes", {}).get("unit_of_measurement", "")
+                    
+                    state_text = f"🔍 État de {entity_id} ({friendly_name}):\n"
+                    state_text += f"État: {state} {unit}".strip()
+                    
+                    # Ajouter des attributs intéressants
+                    attributes = entity_state.get("attributes", {})
+                    if "device_class" in attributes:
+                        state_text += f"\nType: {attributes['device_class']}"
+                    if "last_changed" in entity_state:
+                        state_text += f"\nDernière modification: {entity_state['last_changed']}"
+                    
+                    return {
+                        "content": [{
+                            "type": "text",
+                            "text": state_text
+                        }],
+                        "isError": False
+                    }
+                    
+            elif name == "call_service":
+                domain = args.get("domain")
+                service = args.get("service")
+                entity_id = args.get("entity_id")
+                service_data = args.get("data", {})
+                
+                if not domain or not service:
+                    return {
+                        "content": [{
+                            "type": "text",
+                            "text": "❌ Paramètres domain et service requis"
+                        }],
+                        "isError": True
+                    }
+                
+                async with ha_client:
+                    result = await ha_client.call_service(domain, service, entity_id, service_data)
+                    
+                    service_text = f"🎯 Service {domain}.{service} exécuté"
+                    if entity_id:
+                        service_text += f" sur {entity_id}"
+                    if service_data:
+                        service_text += f" avec données: {json.dumps(service_data, indent=2)}"
+                    service_text += "\n✅ Commande envoyée avec succès"
+                    
+                    return {
+                        "content": [{
+                            "type": "text",
+                            "text": service_text
+                        }],
+                        "isError": False
+                    }
+                    
+            else:
+                return {
+                    "content": [{
+                        "type": "text",
+                        "text": f"❌ Outil inconnu: {name}\nOutils disponibles: get_entities, get_state, call_service"
+                    }],
+                    "isError": True
+                }
+                
+        except Exception as e:
+            logging.error(f"❌ Erreur lors de l'exécution de l'outil {name}: {e}")
             return {
                 "content": [{
                     "type": "text",
-                    "text": f"🔧 Mock: État de {entity_id}: {'on' if 'light' in entity_id else '22.5°C' if 'temperature' in entity_id else 'unknown'}"
-                }],
-                "isError": False
-            }
-        elif name == "call_service":
-            domain = args.get("domain")
-            service = args.get("service") 
-            entity_id = args.get("entity_id")
-            return {
-                "content": [{
-                    "type": "text",
-                    "text": f"🔧 Mock: Service {domain}.{service} appelé sur {entity_id} - Exécuté avec succès"
-                }],
-                "isError": False
-            }
-        else:
-            return {
-                "content": [{
-                    "type": "text",
-                    "text": f"❌ Outil inconnu: {name}"
+                    "text": f"❌ Erreur lors de l'exécution de {name}: {str(e)}"
                 }],
                 "isError": True
             }
@@ -738,16 +838,21 @@ app = FastAPI(
 )
 
 # Configuration des templates et fichiers statiques
-templates = Jinja2Templates(directory="../web/templates")
+# Calculer le chemin absolu du répertoire web
+import os
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WEB_DIR = os.path.join(BASE_DIR, "web")
+
+templates = Jinja2Templates(directory=os.path.join(WEB_DIR, "templates"))
 
 # Monter les fichiers statiques
-app.mount("/static", StaticFiles(directory="../web/static"), name="static")
+app.mount("/static", StaticFiles(directory=os.path.join(WEB_DIR, "static")), name="static")
 
 # Route spécifique pour favicon
 @app.get("/favicon.ico")
 async def favicon():
     """Retourne le favicon du site"""
-    return FileResponse("../web/static/favicon.svg", media_type="image/svg+xml")
+    return FileResponse(os.path.join(WEB_DIR, "static", "favicon.svg"), media_type="image/svg+xml")
 
 # CORS Middleware
 app.add_middleware(
@@ -1062,9 +1167,10 @@ async def bridge_status():
 
 # 🔐 Authentication Dependencies
 security = HTTPBearer(auto_error=False)  # Ne pas lever d'erreur automatiquement
+api_token_manager = APITokenManager()
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> UserResponse:
-    """Dépendance pour obtenir l'utilisateur actuel depuis le token JWT"""
+    """Dépendance pour obtenir l'utilisateur actuel depuis le token JWT ou API"""
     try:
         # Vérifier si les credentials sont fournis
         if not credentials:
@@ -1075,24 +1181,48 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             )
         
         token = credentials.credentials
-        token_data = auth_manager.verify_token(token)
         
-        if token_data is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials",
-                headers={"WWW-Authenticate": "Bearer"},
+        # Vérifier si c'est un token API personnalisé (commence par 'mcp_')
+        if token.startswith('mcp_'):
+            token_data = api_token_manager.validate_token(token)
+            if token_data is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid API token",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            
+            # Créer une réponse utilisateur depuis les données du token API
+            return UserResponse(
+                id=token_data["user_id"],
+                username=token_data["username"],
+                role=UserRole(token_data["role"]),
+                created_at=datetime.now(),
+                last_login=datetime.now(),
+                is_active=True,
+                api_token_auth=True  # Marquer comme authentifié par token API
             )
-        
-        user = await auth_manager.get_user_by_id(token_data.user_id)
-        if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        return user
+        else:
+            # Token JWT classique
+            token_data = auth_manager.verify_token(token)
+            
+            if token_data is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid authentication credentials",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            
+            user = await auth_manager.get_user_by_id(token_data.user_id)
+            if user is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="User not found",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            
+            return user
+            
     except HTTPException:
         raise
     except Exception as e:
@@ -1261,6 +1391,58 @@ async def logout_user(current_user: UserResponse = Depends(get_current_user),
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Logout failed"
+        )
+
+class PasswordChangeRequest(BaseModel):
+    """Modèle pour changement de mot de passe"""
+    current_password: str = Field(..., description="Mot de passe actuel")
+    new_password: str = Field(..., min_length=6, description="Nouveau mot de passe")
+
+@app.post("/auth/change-password")
+async def change_password(
+    request: PasswordChangeRequest,
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Change le mot de passe de l'utilisateur"""
+    try:
+        # Vérifier le mot de passe actuel
+        user = await auth_manager.authenticate_user(
+            current_user.username, 
+            request.current_password
+        )
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mot de passe actuel incorrect"
+            )
+        
+        # Changer le mot de passe
+        success = await auth_manager.change_password(
+            current_user.id, 
+            request.new_password
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erreur lors du changement de mot de passe"
+            )
+        
+        logger.info(f"🔐 Password changed for user: {current_user.username}")
+        
+        return JSONResponse({
+            "status": "success",
+            "message": "Mot de passe changé avec succès"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Password change error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erreur lors du changement de mot de passe"
         )
 
 @app.get("/auth/me", response_model=UserResponse)
@@ -1627,7 +1809,89 @@ async def shutdown_server():
 
 
 # ================================
-# 🔐 PERMISSIONS ENDPOINTS
+# � API TOKENS ENDPOINTS
+# ================================
+
+class APITokenRequest(BaseModel):
+    """Modèle pour créer un token API"""
+    token_name: str = Field(default="LM Studio", description="Nom du token")
+    expires_days: int = Field(default=365, description="Durée de validité en jours")
+
+class APITokenResponse(BaseModel):
+    """Modèle de réponse pour un token API"""
+    token: str
+    token_id: int
+    expires_at: str
+    permissions: dict
+
+@app.post("/api/tokens/generate")
+async def generate_api_token(
+    request: APITokenRequest,
+    current_user: UserResponse = Depends(get_current_user)
+) -> APITokenResponse:
+    """Génère un nouveau token API pour l'utilisateur"""
+    try:
+        # Générer le token
+        token_info = api_token_manager.generate_token(
+            user_id=current_user.id,
+            token_name=request.token_name,
+            expires_days=request.expires_days
+        )
+        
+        logger.info(f"🔑 Token API généré pour utilisateur {current_user.username}")
+        
+        return APITokenResponse(
+            token=token_info["token"],
+            token_id=token_info["token_id"],
+            expires_at=token_info["expires_at"],
+            permissions=token_info["permissions"]
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur génération token API: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tokens")
+async def list_api_tokens(current_user: UserResponse = Depends(get_current_user)):
+    """Liste tous les tokens API de l'utilisateur"""
+    try:
+        tokens = api_token_manager.list_user_tokens(current_user.id)
+        return {
+            "status": "success",
+            "tokens": tokens
+        }
+    except Exception as e:
+        logger.error(f"❌ Erreur liste tokens API: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/tokens/{token_id}")
+async def revoke_api_token(
+    token_id: int,
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Révoque un token API"""
+    try:
+        success = api_token_manager.revoke_token(token_id, current_user.id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Token non trouvé")
+        
+        logger.info(f"🔑 Token API {token_id} révoqué pour utilisateur {current_user.username}")
+        
+        return {
+            "status": "success",
+            "message": "Token révoqué avec succès"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur révocation token API: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ================================
+# �🔐 PERMISSIONS ENDPOINTS
 # ================================
 
 # Models pour les permissions
@@ -2115,6 +2379,18 @@ async def get_logs_template():
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Template non trouvé")
+
+@app.get("/profile", response_class=HTMLResponse)
+async def profile_page(request: Request, current_user: UserResponse = Depends(get_current_user)):
+    """Page profil utilisateur"""
+    try:
+        return templates.TemplateResponse("profile.html", {
+            "request": request,
+            "user": current_user
+        })
+    except Exception as e:
+        logger.error(f"❌ Error loading profile page: {e}")
+        raise HTTPException(status_code=500, detail="Erreur chargement page profil")
 
 @app.get("/api/templates/admin", response_class=HTMLResponse)
 async def get_admin_template():
