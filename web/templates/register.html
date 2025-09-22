@@ -125,7 +125,59 @@
         // Empêcher l'initialisation automatique de MCPDashboard sur la page d'inscription
         window.skipDashboardInit = true;
     </script>
-    <script src="/static/js/dashboard.js"></script>
+        <script src="/static/js/secure-cache.js"></script>
+    <!-- Le dashboard.js n'est pas nécessaire sur la page d'inscription -->
+    <script>
+        // 🔐 Gestion du formulaire d'inscription uniquement
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📍 Page d\'inscription chargée');
+            
+            const registerForm = document.getElementById('register-form');
+            if (registerForm) {
+                registerForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    const formData = new FormData(registerForm);
+                    const registerData = {
+                        username: formData.get('username'),
+                        email: formData.get('email'),
+                        password: formData.get('password')
+                    };
+                    
+                    // Vérifier que les mots de passe correspondent
+                    const confirmPassword = formData.get('confirm_password');
+                    if (registerData.password !== confirmPassword) {
+                        alert('Les mots de passe ne correspondent pas');
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetch('/auth/register', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(registerData)
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (response.ok) {
+                            console.log('✅ Inscription réussie');
+                            alert('Inscription réussie ! Vous pouvez maintenant vous connecter.');
+                            window.location.href = '/login';
+                        } else {
+                            console.error('❌ Erreur d\'inscription:', result.detail);
+                            alert('Erreur d\'inscription: ' + result.detail);
+                        }
+                    } catch (error) {
+                        console.error('💥 Erreur réseau:', error);
+                        alert('Erreur de connexion au serveur');
+                    }
+                });
+            }
+        });
+    </script>
     <script>
         // Gestion spécifique de la page d'inscription
         document.addEventListener('DOMContentLoaded', () => {

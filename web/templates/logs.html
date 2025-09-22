@@ -180,6 +180,17 @@
     </div>
 </div>
 
+<!-- Import du cache sécurisé si disponible -->
+<script>
+// Chargement conditionnel du cache sécurisé
+if (!window.secureCache && typeof loadSecureCache === 'undefined') {
+    const script = document.createElement('script');
+    script.src = '/static/js/secure-cache.js';
+    script.onload = () => console.log('🔐 Cache sécurisé chargé dans logs.html');
+    document.head.appendChild(script);
+}
+</script>
+
 <script>
 class LogsManager {
     constructor() {
@@ -616,6 +627,34 @@ class LogsManager {
     }
 }
 
-// Initialiser le gestionnaire de logs
-const logsManager = new LogsManager();
+// Initialiser le gestionnaire de logs de manière sécurisée
+document.addEventListener('DOMContentLoaded', function() {
+    // S'assurer que tous les éléments sont disponibles
+    if (typeof LogsManager !== 'undefined') {
+        window.logsManager = new LogsManager();
+    } else {
+        console.error('LogsManager non défini');
+    }
+});
+
+// Définir globalement pour compatibilité
+if (typeof window !== 'undefined') {
+    window.logsManager = null;
+    
+    // Attendre que le DOM soit prêt
+    const initLogsManager = () => {
+        if (document.getElementById('logs-management') && typeof LogsManager !== 'undefined') {
+            window.logsManager = new LogsManager();
+        } else {
+            // Réessayer après un court délai
+            setTimeout(initLogsManager, 100);
+        }
+    };
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initLogsManager);
+    } else {
+        initLogsManager();
+    }
+}
 </script>

@@ -17,7 +17,13 @@ sdist/
 var/
 wheels/
 *.egg-info/
+src/*.egg-info/
 .installed.cfg
+
+# Virtual Environment
+venv/
+env/
+ENV/
 *.egg
 MANIFEST
 
@@ -49,6 +55,8 @@ tmp/
 test_results/
 backup/
 *.backup
+bridge_data.db
+*.db
 
 # Temporary development files
 *_temp.py
@@ -56,6 +64,12 @@ backup/
 fix_*.py
 start_dev_*.py
 run_*.py
+test_temp_*.py
+
+# Configuration files with secrets
+.env
+configs/mcp-config-fixed.json
+.env.raspberry_pi
 
 # Development documentation (local only)
 docs/DEVELOPMENT_RULES.md

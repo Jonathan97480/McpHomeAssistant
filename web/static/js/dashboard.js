@@ -4,33 +4,117 @@
 class MCPDashboard {
     constructor() {
         this.baseUrl = window.location.origin;
-        this.token = localStorage.getItem('mcp_token');
-        this.user = JSON.parse(localStorage.getItem('mcp_user') || '{}');
+
+        // 🔐 Utilisation du cache sécurisé pour les données sensibles
+        this.initSecureData();
+
         this.socket = null;
         this.currentPage = 'dashboard';
 
         this.init();
     }
 
+    /**
+     * 🔐 Initialise les données depuis le cache sécurisé
+     */
+    initSecureData() {
+        // Récupérer depuis le cache sécurisé en priorité
+        const cachedUser = window.secureCache ? window.getUser() : null;
+        const cachedServer = window.secureCache ? window.getServer() : null;
+
+        if (cachedUser) {
+            this.token = cachedUser.token;
+            this.user = cachedUser;
+            console.log('🔓 Données utilisateur récupérées du cache sécurisé');
+        } else {
+            // Fallback vers localStorage (migration progressive)
+            this.token = localStorage.getItem('mcp_token');
+            this.user = JSON.parse(localStorage.getItem('mcp_user') || '{}');
+
+            // Migrer vers le cache sécurisé si possible
+            if (this.user.username && window.secureCache) {
+                this.user.token = this.token;
+                window.cacheUser(this.user);
+                console.log('🔄 Migration utilisateur vers cache sécurisé');
+            }
+        }
+
+        if (cachedServer) {
+            console.log('🔓 Infos serveur récupérées du cache sécurisé');
+        }
+    }
+
     init() {
         console.log('🚀 Initialisation MCP Dashboard');
 
-        // Vérifier l'authentification
-        if (!this.token && window.location.pathname !== '/login') {
+        // Ne pas initialiser sur les pages d'authentification
+        const currentPath = window.location.pathname;
+        if (currentPath === '/login' || currentPath === '/register') {
+            console.log('📍 Page d\'authentification détectée, initialisation des événements uniquement');
+            this.setupAuthEventListeners();
+            return;
+        }
+
+        // Vérifier l'authentification pour les pages protégées
+        if (!this.token) {
+            console.log('🔒 Aucun token trouvé, redirection vers login');
             this.redirectToLogin();
             return;
         }
 
-        // Initialiser l'interface
-        this.setupEventListeners();
-        this.setupNavigation();
-        this.setupWebSocket();
+        // Valider le token avant de continuer
+        this.validateToken().then(isValid => {
+            if (!isValid) {
+                console.log('🔒 Token invalide, redirection vers login');
+                this.clearAuthData();
+                this.redirectToLogin();
+                return;
+            }
 
-        // Charger la page actuelle
-        this.loadCurrentPage();
+            console.log('✅ Token valide, initialisation complète du dashboard');
 
-        // Actualiser les données toutes les 30 secondes
-        setInterval(() => this.refreshData(), 30000);
+            // Initialiser l'interface
+            this.setupEventListeners();
+            this.setupNavigation();
+            this.setupWebSocket();
+
+            // Charger la page actuelle
+            this.loadCurrentPage();
+
+            // Actualiser les données toutes les 30 secondes
+            setInterval(() => this.refreshData(), 30000);
+        }).catch(error => {
+            console.error('❌ Erreur validation token:', error);
+            this.clearAuthData();
+            this.redirectToLogin();
+        });
+    }
+
+    /**
+     * 🔐 Configuration des événements pour les pages d'authentification uniquement
+     */
+    setupAuthEventListeners() {
+        console.log('🔐 Configuration des événements d\'authentification');
+
+        // Formulaire de connexion
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => this.handleLogin(e));
+        }
+
+        // Formulaire d'inscription
+        const registerForm = document.getElementById('register-form');
+        if (registerForm) {
+            registerForm.addEventListener('submit', (e) => this.handleRegister(e));
+        }
+
+        // Liens de navigation entre login/register
+        document.querySelectorAll('a[href="/login"], a[href="/register"]').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                window.location.href = link.getAttribute('href');
+            });
+        });
     }
 
     setupEventListeners() {
@@ -46,7 +130,7 @@ class MCPDashboard {
             logoutBtn.addEventListener('click', () => this.logout());
         }
 
-        // Formulaires
+        // Formulaires (aussi configuré dans setupAuthEventListeners)
         const loginForm = document.getElementById('login-form');
         if (loginForm) {
             loginForm.addEventListener('submit', (e) => this.handleLogin(e));
@@ -218,8 +302,18 @@ class MCPDashboard {
 
         this.token = null;
         this.user = {};
+
+        // 🔐 Nettoyage sécurisé de toutes les données sensibles
+        if (window.secureCache) {
+            window.secureCache.clear();
+            console.log('🔥 Cache sécurisé vidé à la déconnexion');
+        }
+
+        // Nettoyage localStorage (migration progressive)
         localStorage.removeItem('mcp_token');
         localStorage.removeItem('mcp_user');
+        localStorage.removeItem('ha_config');  // Au cas où
+        sessionStorage.clear();
 
         if (this.socket) {
             this.socket.close();
@@ -230,6 +324,46 @@ class MCPDashboard {
 
     redirectToLogin() {
         window.location.href = '/login';
+    }
+
+    /**
+     * 🔐 Valide le token auprès du serveur
+     */
+    async validateToken() {
+        if (!this.token) return false;
+
+        try {
+            const response = await fetch('/auth/me', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`
+                }
+            });
+            return response.ok;
+        } catch (error) {
+            console.error('❌ Erreur validation token:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 🗑️ Nettoie toutes les données d'authentification
+     */
+    clearAuthData() {
+        // Nettoyer localStorage
+        localStorage.removeItem('mcp_token');
+        localStorage.removeItem('mcp_user');
+
+        // Nettoyer cache sécurisé
+        if (window.secureCache) {
+            window.secureCache.clear();
+        }
+
+        // Réinitialiser les propriétés
+        this.token = null;
+        this.user = {};
+
+        console.log('🗑️ Données d\'authentification supprimées');
     }
 
     toggleSidebar() {
@@ -350,7 +484,7 @@ class MCPDashboard {
 
             // Pages qui doivent réexécuter leurs scripts pour recharger les données
             const currentPath = window.location.pathname;
-            const reloadablePages = ['/tools', '/permissions', '/overview'];
+            const reloadablePages = ['/tools', '/permissions', '/overview', '/config', '/logs'];
             const shouldReexecute = reloadablePages.some(path => currentPath.includes(path));
 
             if (!shouldReexecute && this.executedScripts.has(scriptId)) {
@@ -393,8 +527,25 @@ class MCPDashboard {
     }
 
     generateScriptId(content) {
-        // Générer un identifiant simple basé sur le contenu
-        return btoa(content.substring(0, 100)).replace(/[^a-zA-Z0-9]/g, '');
+        // Générer un identifiant sécurisé sans utiliser btoa pour éviter les erreurs Unicode
+        try {
+            // Nettoyer le contenu pour ne garder que les caractères ASCII
+            const cleanContent = content.substring(0, 100).replace(/[^\x00-\x7F]/g, "");
+
+            // Utiliser une méthode alternative pour générer l'ID
+            let hash = 0;
+            for (let i = 0; i < cleanContent.length; i++) {
+                const char = cleanContent.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convertir en 32bit integer
+            }
+
+            return 'script_' + Math.abs(hash).toString(36);
+        } catch (error) {
+            console.warn('Erreur génération ID script:', error);
+            // Fallback: utiliser timestamp
+            return 'script_' + Date.now().toString(36);
+        }
     }
 
     async loadCurrentPage() {

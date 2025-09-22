@@ -94,7 +94,62 @@
         // Empêcher l'initialisation automatique de MCPDashboard sur la page de login
         window.skipDashboardInit = true;
     </script>
-    <script src="/static/js/dashboard.js"></script>
+        <script src="/static/js/secure-cache.js"></script>
+    <!-- Le dashboard.js n'est pas nécessaire sur la page de login -->
+    <script>
+        // 🔐 Gestion du formulaire de connexion uniquement
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📍 Page de login chargée');
+            
+            const loginForm = document.getElementById('login-form');
+            if (loginForm) {
+                loginForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    const formData = new FormData(loginForm);
+                    const loginData = {
+                        username: formData.get('username'),
+                        password: formData.get('password')
+                    };
+                    
+                    try {
+                        const response = await fetch('/auth/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(loginData)
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (response.ok) {
+                            console.log('✅ Connexion réussie');
+                            
+                            // Stocker les informations dans le cache sécurisé
+                            if (window.secureCache) {
+                                const userData = {
+                                    ...result.user,
+                                    token: result.access_token
+                                };
+                                window.cacheUser(userData);
+                                console.log('💾 Utilisateur sauvegardé dans le cache sécurisé');
+                            }
+                            
+                            // Redirection vers le dashboard
+                            window.location.href = '/dashboard';
+                        } else {
+                            console.error('❌ Erreur de connexion:', result.detail);
+                            alert('Erreur de connexion: ' + result.detail);
+                        }
+                    } catch (error) {
+                        console.error('💥 Erreur réseau:', error);
+                        alert('Erreur de connexion au serveur');
+                    }
+                });
+            }
+        });
+    </script>
     <script>
         // Gestion spécifique de la page de login
         document.addEventListener('DOMContentLoaded', () => {
@@ -104,10 +159,31 @@
                 globalLoader.classList.add('hidden');
             }
             
-            // Rediriger si déjà connecté
+            // Rediriger si déjà connecté (après validation du token)
             const token = localStorage.getItem('mcp_token');
             if (token && window.location.pathname === '/login') {
-                window.location.href = '/dashboard';
+                // Valider le token avant de rediriger
+                fetch('/auth/me', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                }).then(response => {
+                    if (response.ok) {
+                        // Token valide, on peut rediriger
+                        window.location.href = '/dashboard';
+                    } else {
+                        // Token invalide, le supprimer
+                        localStorage.removeItem('mcp_token');
+                        localStorage.removeItem('mcp_user');
+                        console.log('🗑️ Token invalide supprimé');
+                    }
+                }).catch(error => {
+                    console.error('❌ Erreur validation token:', error);
+                    // En cas d'erreur, supprimer le token pour éviter la boucle
+                    localStorage.removeItem('mcp_token');
+                    localStorage.removeItem('mcp_user');
+                });
                 return;
             }
             

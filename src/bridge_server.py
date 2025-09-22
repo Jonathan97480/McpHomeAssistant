@@ -16,7 +16,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Header, Request, Depends, status, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
@@ -735,6 +735,12 @@ templates = Jinja2Templates(directory="web/templates")
 
 # Monter les fichiers statiques
 app.mount("/static", StaticFiles(directory="web/static"), name="static")
+
+# Route spécifique pour favicon
+@app.get("/favicon.ico")
+async def favicon():
+    """Retourne le favicon du site"""
+    return FileResponse("web/static/favicon.svg", media_type="image/svg+xml")
 
 # CORS Middleware
 app.add_middleware(

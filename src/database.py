@@ -397,9 +397,13 @@ class DatabaseManager:
     async def get_stats(self, days: int = 7) -> Dict[str, Any]:
         """Récupère les statistiques des derniers jours"""
         try:
+            # S'assurer que row_factory est en mode dictionnaire pour cette fonction
+            original_row_factory = self.connection.row_factory
+            self.connection.row_factory = sqlite3.Row
+            
             cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
             
-            # Statistiques des requêtes
+            # Statistiques des requêtes (fetchone retourne sqlite3.Row)
             request_stats = self.connection.execute("""
                 SELECT 
                     COUNT(*) as total_requests,
@@ -435,6 +439,9 @@ class DatabaseManager:
                 LIMIT 10
             """, (cutoff_date,)).fetchall()
             
+            # Restaurer row_factory
+            self.connection.row_factory = original_row_factory
+            
             return {
                 "period_days": days,
                 "requests": dict(request_stats) if request_stats else {},
@@ -444,6 +451,8 @@ class DatabaseManager:
             }
             
         except Exception as e:
+            # Restaurer row_factory en cas d'erreur
+            self.connection.row_factory = original_row_factory
             logging.error(f"❌ Erreur récupération stats: {e}")
             return {}
     
@@ -553,6 +562,10 @@ class DatabaseManager:
     async def get_user_ha_config(self, username: str = "beroute"):
         """Récupère la configuration Home Assistant active pour un utilisateur"""
         try:
+            # S'assurer que row_factory est en mode tuple pour cette fonction
+            original_row_factory = self.connection.row_factory
+            self.connection.row_factory = None
+            
             query = """
                 SELECT url, token_encrypted, name, last_test, last_status 
                 FROM ha_configs 
@@ -563,8 +576,12 @@ class DatabaseManager:
             
             cursor = self.connection.execute(query)
             result = cursor.fetchone()
+            
+            # Restaurer row_factory
+            self.connection.row_factory = original_row_factory
+            
             if result:
-                # Déchiffrer le token (result est un tuple, pas un dict)
+                # Déchiffrer le token (result est un tuple)
                 import base64
                 try:
                     token_decrypted = base64.b64decode(result[1]).decode()  # index 1 = token_encrypted
@@ -585,6 +602,8 @@ class DatabaseManager:
                 
         except Exception as e:
             logging.error(f"❌ Erreur récupération config HA: {e}")
+            # Restaurer row_factory en cas d'erreur
+            self.connection.row_factory = original_row_factory
             return None
     
     async def save_system_config(self, config_type: str, config_data: dict):

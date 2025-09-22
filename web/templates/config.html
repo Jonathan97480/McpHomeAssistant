@@ -3,6 +3,7 @@
     <div class="flex justify-between items-center mb-6">
         <h2 class="text-2xl font-bold">Configuration</h2>
         <div class="flex gap-3">
+            <button class="btn btn-secondary" id="debug-cache">🔍 Debug Cache</button>
             <button class="btn btn-secondary" id="test-config">🧪 Tester</button>
             <button class="btn btn-primary" id="save-config">💾 Enregistrer</button>
         </div>
@@ -18,27 +19,34 @@
             </div>
         </div>
         <div class="card-body">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="form-group">
-                    <label class="form-label required">URL Home Assistant</label>
-                    <input type="url" class="form-input" id="ha-url" 
-                           placeholder="http://homeassistant.local:8123" required>
-                    <p class="form-help">URL complète de votre instance Home Assistant</p>
-                </div>
+            <form id="ha-config-form" autocomplete="off">
+                <!-- Champ username caché pour l'accessibilité des formulaires de mot de passe -->
+                <input type="text" name="username" style="display: none;" autocomplete="username" readonly>
                 
-                <div class="form-group">
-                    <label class="form-label required">Token d'accès</label>
-                    <div class="input-group">
-                        <input type="password" class="form-input" id="ha-token" 
-                               placeholder="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." required>
-                        <button class="btn btn-secondary" id="toggle-token" type="button">👁️</button>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="form-group">
+                        <label class="form-label required">URL Home Assistant</label>
+                        <input type="url" class="form-input" id="ha-url" name="ha-url"
+                               placeholder="http://homeassistant.local:8123" 
+                               autocomplete="url" required>
+                        <p class="form-help">URL complète de votre instance Home Assistant</p>
                     </div>
-                    <p class="form-help">
-                        Token d'accès long terme généré dans Home Assistant
-                        <a href="#" class="text-primary" id="token-help">Comment obtenir ?</a>
-                    </p>
+                    
+                    <div class="form-group">
+                        <label class="form-label required">Token d'accès</label>
+                        <div class="input-group">
+                            <input type="password" class="form-input" id="ha-token" name="ha-token"
+                                   placeholder="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." 
+                                   autocomplete="current-password" required>
+                            <button class="btn btn-secondary" id="toggle-token" type="button">👁️</button>
+                        </div>
+                        <p class="form-help">
+                            Token d'accès long terme généré dans Home Assistant
+                            <a href="#" class="text-primary" id="token-help">Comment obtenir ?</a>
+                        </p>
+                    </div>
                 </div>
-            </div>
+            </form>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                 <div class="form-group">
@@ -198,16 +206,24 @@
 <script>
 class ConfigManager {
     constructor() {
+        console.log('🚀 ConfigManager - Initialisation...');
         this.init();
     }
     
     init() {
+        console.log('🔧 ConfigManager - init() appelé');
+        console.log('🌐 window.secureCache disponible:', !!window.secureCache);
+        
         this.loadConfiguration();
         this.setupEventListeners();
         this.checkHAStatus();
+        
+        console.log('✅ ConfigManager - Initialisation terminée');
     }
     
     setupEventListeners() {
+        console.log('🎯 Configuration event listeners...');
+        
         // Boutons principaux
         document.getElementById('test-config').addEventListener('click', () => {
             this.testConfiguration();
@@ -215,6 +231,11 @@ class ConfigManager {
         
         document.getElementById('save-config').addEventListener('click', () => {
             this.saveConfiguration();
+        });
+        
+        // Bouton debug cache
+        document.getElementById('debug-cache').addEventListener('click', () => {
+            this.debugCache();
         });
         
         // Toggle password
@@ -236,24 +257,154 @@ class ConfigManager {
             this.hideTokenHelp();
         });
         
+        // 🔐 Sauvegarde automatique dans cache sécurisé
+        this.setupAutoSave();
+        
         // Validation en temps réel
         document.getElementById('ha-url').addEventListener('input', () => {
             this.validateHAUrl();
         });
     }
     
+    /**
+     * 🔐 Configure la sauvegarde automatique dans le cache sécurisé
+     */
+    setupAutoSave() {
+        console.log('🔧 Configuration auto-sauvegarde...');
+        
+        const haUrlInput = document.getElementById('ha-url');
+        const haTokenInput = document.getElementById('ha-token');
+        
+        console.log('🎯 Éléments trouvés:', {
+            haUrlInput: !!haUrlInput,
+            haTokenInput: !!haTokenInput
+        });
+        
+        if (!haUrlInput || !haTokenInput) {
+            console.error('❌ Impossible de configurer auto-sauvegarde - éléments manquants');
+            return;
+        }
+        
+        // Sauvegarder les modifications automatiquement avec debounce
+        let saveTimeout;
+        const autoSave = (source) => {
+            console.log(`🔄 Auto-save déclenché par: ${source}`);
+            
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                const url = haUrlInput.value.trim();
+                const token = haTokenInput.value.trim();
+                
+                console.log('💾 Auto-save - Données à sauvegarder:', {
+                    url: url,
+                    token: token ? `${token.substring(0, 10)}...` : 'vide',
+                    cacheAvailable: !!window.secureCache
+                });
+                
+                if (url && token && window.secureCache) {
+                    const storeResult = window.cacheHA({
+                        url: url,
+                        token: token,
+                        name: 'auto_save'
+                    });
+                    console.log('🔐 Auto-sauvegarde config HA - Résultat:', storeResult);
+                } else {
+                    console.log('⚠️ Auto-save ignoré - données incomplètes ou cache indisponible');
+                }
+            }, 1000); // Attendre 1 seconde après la dernière modification
+        };
+        
+        haUrlInput.addEventListener('input', () => autoSave('url-input'));
+        haTokenInput.addEventListener('input', () => autoSave('token-input'));
+        haUrlInput.addEventListener('blur', () => autoSave('url-blur'));
+        haTokenInput.addEventListener('blur', () => autoSave('token-blur'));
+        
+        console.log('✅ Auto-sauvegarde configurée');
+    }
+    
     async loadConfiguration() {
+        console.group('📋 loadConfiguration - Début');
+        
         try {
+            // 🔐 Attendre que le cache sécurisé soit disponible
+            let cachedHA = null;
+            let retries = 0;
+            const maxRetries = 10;
+            
+            console.log('⏳ Attente du cache sécurisé...');
+            while (retries < maxRetries && !window.secureCache) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                retries++;
+                console.log(`Tentative ${retries}/${maxRetries} - Cache disponible:`, !!window.secureCache);
+            }
+            
+            if (window.secureCache) {
+                console.log('✅ Cache sécurisé disponible');
+                window.secureCache.debug();
+                cachedHA = window.getHA();
+                console.log('🔐 Cache sécurisé disponible, données HA:', cachedHA);
+            } else {
+                console.warn('⚠️ Cache sécurisé non disponible après 1 seconde');
+            }
+            
+            console.log('📡 Récupération config serveur...');
             const response = await fetch('/api/config');
             const config = await response.json();
+            console.log('📡 Config serveur reçue:', config);
             
             // Configuration Home Assistant
             if (config.homeassistant) {
-                document.getElementById('ha-url').value = config.homeassistant.url || '';
-                document.getElementById('ha-token').value = config.homeassistant.token || '';
+                console.group('🏠 Traitement config Home Assistant');
+                
+                // Utiliser le cache sécurisé en priorité pour les données sensibles
+                const haUrl = cachedHA?.url || config.homeassistant.url || '';
+                const haToken = cachedHA?.token || config.homeassistant.token || '';
+                
+                console.log('🔧 Sources des données:', { 
+                    fromCache: !!cachedHA?.url, 
+                    fromServer: !!config.homeassistant.url,
+                    finalUrl: haUrl,
+                    finalToken: haToken ? `${haToken.substring(0, 10)}...` : 'vide'
+                });
+                
+                // Vérifier que les éléments DOM existent
+                const urlElement = document.getElementById('ha-url');
+                const tokenElement = document.getElementById('ha-token');
+                
+                console.log('🎯 Éléments DOM:', {
+                    urlElement: !!urlElement,
+                    tokenElement: !!tokenElement
+                });
+                
+                if (urlElement && tokenElement) {
+                    console.log('📝 Remplissage des champs...');
+                    urlElement.value = haUrl;
+                    tokenElement.value = haToken;
+                    
+                    console.log('✅ Champs remplis:', {
+                        url: urlElement.value,
+                        token: tokenElement.value ? `${tokenElement.value.substring(0, 10)}...` : 'vide'
+                    });
+                } else {
+                    console.error('❌ Éléments DOM non trouvés');
+                }
+                
                 document.getElementById('ha-timeout').value = config.homeassistant.timeout || 10;
                 document.getElementById('ha-retries').value = config.homeassistant.retries || 3;
                 document.getElementById('ha-ssl-verify').value = config.homeassistant.ssl_verify ? 'true' : 'false';
+                
+                // Stocker dans le cache sécurisé si nouvelles données disponibles
+                if (haUrl && haToken && window.secureCache && !cachedHA) {
+                    console.log('💾 Stockage dans cache sécurisé...');
+                    const storeResult = window.cacheHA({
+                        url: haUrl,
+                        token: haToken,
+                        name: 'config_load'
+                    });
+                    console.log('� Résultat stockage:', storeResult);
+                }
+                
+                console.groupEnd();
             }
             
             // Configuration serveur
@@ -287,10 +438,13 @@ class ConfigManager {
     
     async saveConfiguration() {
         try {
+            const haUrl = document.getElementById('ha-url').value;
+            const haToken = document.getElementById('ha-token').value;
+            
             const config = {
                 homeassistant: {
-                    url: document.getElementById('ha-url').value,
-                    token: document.getElementById('ha-token').value,
+                    url: haUrl,
+                    token: haToken,
                     timeout: parseInt(document.getElementById('ha-timeout').value),
                     retries: parseInt(document.getElementById('ha-retries').value),
                     ssl_verify: document.getElementById('ha-ssl-verify').value === 'true'
@@ -313,6 +467,16 @@ class ConfigManager {
                     circuit_threshold: parseInt(document.getElementById('circuit-threshold').value)
                 }
             };
+            
+            // 🔐 Stocker les données HA sensibles dans le cache sécurisé
+            if (haUrl && haToken && window.secureCache) {
+                window.cacheHA({
+                    url: haUrl,
+                    token: haToken,
+                    name: 'config_save'
+                });
+                console.log('🔐 Config HA sauvegardée dans cache sécurisé');
+            }
             
             const response = await fetch('/api/config', {
                 method: 'PUT',
@@ -438,6 +602,58 @@ class ConfigManager {
         } else {
             urlInput.classList.remove('border-red-500');
         }
+    }
+    
+    /**
+     * 🔍 Debug du cache sécurisé
+     */
+    debugCache() {
+        console.group('🔍 DEBUG CACHE SÉCURISÉ');
+        
+        console.log('🌐 Cache disponible:', !!window.secureCache);
+        if (window.secureCache) {
+            console.log('📊 Status cache:', window.secureCache.getStatus());
+            window.secureCache.debug();
+            
+            const haData = window.getHA();
+            console.log('🏠 Données HA en cache:', haData);
+            
+            // Test de stockage/récupération
+            console.log('🧪 Test stockage/récupération...');
+            const testData = {
+                url: 'http://test.local:8123',
+                token: 'test_token_123',
+                name: 'debug_test'
+            };
+            
+            const storeResult = window.cacheHA(testData);
+            console.log('💾 Résultat stockage test:', storeResult);
+            
+            const retrieveResult = window.getHA();
+            console.log('🔓 Résultat récupération test:', retrieveResult);
+        } else {
+            console.error('❌ Cache sécurisé non disponible');
+        }
+        
+        // État des champs DOM
+        const urlField = document.getElementById('ha-url');
+        const tokenField = document.getElementById('ha-token');
+        
+        console.log('🎯 État des champs DOM:', {
+            urlField: !!urlField,
+            urlValue: urlField?.value || 'N/A',
+            tokenField: !!tokenField,
+            tokenValue: tokenField?.value ? `${tokenField.value.substring(0, 10)}...` : 'N/A'
+        });
+        
+        console.groupEnd();
+        
+        // Afficher une alerte avec un résumé
+        const summary = window.secureCache ? 
+            `Cache disponible ✅\nDonnées HA: ${window.getHA() ? 'présentes' : 'absentes'}\nTaille cache: ${window.secureCache.encrypted.size}` :
+            'Cache non disponible ❌';
+            
+        alert(`Debug Cache Sécurisé\n\n${summary}\n\nVoir console pour détails complets`);
     }
 }
 

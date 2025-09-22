@@ -138,11 +138,40 @@
         </div>
     </div>
     
+    <!-- Secure Client Cache System -->
+    <script src="/static/js/secure-cache.js"></script>
     <script src="/static/js/dashboard.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Initialiser les infos utilisateur dans l'interface
-            const user = JSON.parse(localStorage.getItem('mcp_user') || '{}');
+            // 🔐 Migration automatique vers le cache sécurisé
+            const migrateToSecureCache = () => {
+                // Migration des données utilisateur
+                const user = JSON.parse(localStorage.getItem('mcp_user') || '{}');
+                if (user.username) {
+                    window.cacheUser(user);
+                    console.log('✅ Données utilisateur migrées vers cache sécurisé');
+                }
+                
+                // Migration config Home Assistant si elle existe
+                const haConfig = JSON.parse(localStorage.getItem('ha_config') || '{}');
+                if (haConfig.url && haConfig.token) {
+                    window.cacheHA(haConfig);
+                    console.log('✅ Config HA migrée vers cache sécurisé');
+                }
+                
+                // Stockage des infos serveur
+                window.cacheServer({
+                    url: window.location.origin,
+                    session_id: sessionStorage.getItem('session_id') || 'unknown'
+                });
+                console.log('✅ Infos serveur stockées dans cache sécurisé');
+            };
+            
+            // Effectuer la migration
+            migrateToSecureCache();
+            
+            // Initialiser les infos utilisateur dans l'interface depuis le cache sécurisé
+            const user = window.getUser() || JSON.parse(localStorage.getItem('mcp_user') || '{}');
             
             if (user.username) {
                 document.getElementById('user-name').textContent = user.full_name || user.username;
