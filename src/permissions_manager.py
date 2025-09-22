@@ -209,8 +209,51 @@ class PermissionsManager:
             logger.error(f"Erreur récupération permissions par défaut: {e}")
             return {}
     
+    async def set_default_permission(self, tool_name: str, can_read: bool = True, 
+                                   can_write: bool = False, can_execute: bool = False,
+                                   tool_category: str = "general", description: str = "") -> bool:
+        """Définit une permission par défaut pour un outil"""
+        try:
+            if not db_manager:
+                logger.error("Base de données non initialisée")
+                return False
+            
+            # Vérifier si la permission existe déjà
+            existing = await db_manager.fetch_one(
+                "SELECT id FROM default_permissions WHERE tool_name = ?",
+                (tool_name,)
+            )
+            
+            if existing:
+                # Mettre à jour (sans can_execute pour compatibilité)
+                await db_manager.execute(
+                    """UPDATE default_permissions 
+                       SET can_read = ?, can_write = ?, 
+                           tool_category = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+                       WHERE tool_name = ?""",
+                    (can_read, can_write, tool_category, description, tool_name)
+                )
+            else:
+                # Créer nouvelle permission (sans can_execute pour compatibilité)
+                await db_manager.execute(
+                    """INSERT INTO default_permissions 
+                       (tool_name, can_read, can_write, tool_category, description)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (tool_name, can_read, can_write, tool_category, description)
+                )
+            
+            # Invalider le cache
+            self.default_permissions_cache = None
+            
+            logger.info(f"Permission par défaut définie pour {tool_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Erreur définition permission par défaut pour {tool_name}: {e}")
+            return False
+    
     async def get_user_permissions(self, user_id: int, force_refresh: bool = False) -> Dict[str, ToolPermission]:
-        """Récupère les permissions d'un utilisateur avec cache"""
+        """Récupère les permissions explicites d'un utilisateur avec cache"""
         try:
             # Vérifier le cache utilisateur
             if not force_refresh and user_id in self.permission_cache:
@@ -218,14 +261,48 @@ class PermissionsManager:
                 if (datetime.now() - cache.last_updated).total_seconds() < cache.cache_ttl:
                     return cache.permissions
             
-            # Charger les permissions par défaut
-            default_perms = await self.get_default_permissions()
-            
-            # Charger les permissions personnalisées de l'utilisateur
+            # Charger UNIQUEMENT les permissions personnalisées de l'utilisateur
             user_perms_data = await db_manager.fetch_all(
                 "SELECT * FROM user_tool_permissions WHERE user_id = ?",
                 (user_id,)
             )
+            
+            # Construire le dictionnaire des permissions utilisateur uniquement
+            final_permissions = {}
+            
+            # Appliquer les permissions utilisateur
+            for user_perm in user_perms_data:
+                tool_name = user_perm['tool_name']
+                final_permissions[tool_name] = ToolPermission(
+                    tool_name=tool_name,
+                    can_read=user_perm['can_read'],
+                    can_write=user_perm['can_write'],
+                    is_enabled=user_perm['is_enabled'],
+                    tool_category="general",
+                    last_used=user_perm['last_used']
+                )
+            
+            # Mettre à jour le cache
+            self.permission_cache[user_id] = UserPermissionCache(
+                user_id=user_id,
+                permissions=final_permissions,
+                last_updated=datetime.now()
+            )
+            
+            return final_permissions
+            
+        except Exception as e:
+            logger.error(f"Erreur récupération permissions utilisateur {user_id}: {e}")
+            return {}
+
+    async def get_effective_user_permissions(self, user_id: int, force_refresh: bool = False) -> Dict[str, ToolPermission]:
+        """Récupère les permissions effectives d'un utilisateur (utilisateur + défaut)"""
+        try:
+            # Charger les permissions par défaut
+            default_perms = await self.get_default_permissions()
+            
+            # Charger les permissions utilisateur
+            user_perms = await self.get_user_permissions(user_id, force_refresh)
             
             # Construire le dictionnaire des permissions finales
             final_permissions = {}
@@ -242,47 +319,51 @@ class PermissionsManager:
                 )
             
             # Appliquer les personnalisations utilisateur
-            for user_perm in user_perms_data:
-                tool_name = user_perm['tool_name']
-                
-                # Si l'outil existe dans les permissions par défaut
+            for tool_name, user_perm in user_perms.items():
                 if tool_name in final_permissions:
                     perm = final_permissions[tool_name]
-                    perm.can_read = user_perm['can_read']
-                    perm.can_write = user_perm['can_write']
-                    perm.is_enabled = user_perm['is_enabled']
-                    perm.last_used = user_perm['last_used']
+                    perm.can_read = user_perm.can_read
+                    perm.can_write = user_perm.can_write
+                    perm.is_enabled = user_perm.is_enabled
+                    perm.last_used = user_perm.last_used
                 else:
                     # Outil personnalisé pas dans les défauts
-                    final_permissions[tool_name] = ToolPermission(
-                        tool_name=tool_name,
-                        can_read=user_perm['can_read'],
-                        can_write=user_perm['can_write'],
-                        is_enabled=user_perm['is_enabled'],
-                        tool_category="general",
-                        last_used=user_perm['last_used']
-                    )
-            
-            # Mettre à jour le cache
-            self.permission_cache[user_id] = UserPermissionCache(
-                user_id=user_id,
-                permissions=final_permissions,
-                last_updated=datetime.now()
-            )
+                    final_permissions[tool_name] = user_perm
             
             return final_permissions
             
         except Exception as e:
-            logger.error(f"Erreur récupération permissions utilisateur {user_id}: {e}")
+            logger.error(f"Erreur récupération permissions effectives utilisateur {user_id}: {e}")
             return {}
     
     async def check_permission(self, user_id: int, tool_name: str, permission_type: PermissionType) -> bool:
         """Vérifie si un utilisateur a une permission spécifique"""
         try:
             user_perms = await self.get_user_permissions(user_id)
+            logger.debug(f"Permissions utilisateur {user_id}: {list(user_perms.keys())}")
             
             if tool_name not in user_perms:
                 logger.warning(f"Outil {tool_name} non trouvé dans les permissions utilisateur {user_id}")
+                
+                # Vérifier dans les permissions par défaut directement
+                default_perms = await self.get_default_permissions()
+                logger.debug(f"Permissions par défaut disponibles: {list(default_perms.keys())}")
+                
+                if tool_name in default_perms:
+                    perm = default_perms[tool_name]
+                    logger.info(f"Utilisation permission par défaut pour {tool_name}")
+                    
+                    # Vérifier si l'outil est activé
+                    if not perm.is_enabled:
+                        return False
+                    
+                    # Vérifier le type de permission
+                    if permission_type == PermissionType.READ:
+                        return perm.can_read
+                    elif permission_type == PermissionType.WRITE or permission_type == PermissionType.EXECUTE:
+                        return perm.can_write
+                
+                logger.debug(f"Aucune permission trouvée pour {tool_name}, retour False")
                 return False
             
             perm = user_perms[tool_name]

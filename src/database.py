@@ -530,6 +530,52 @@ class DatabaseManager:
             logging.error(f"Erreur comptage requêtes entre {start_time} et {end_time}: {e}")
             return 0
 
+    async def get_recent_logs(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Récupère les logs récents depuis la base de données"""
+        try:
+            # S'assurer que row_factory est en mode Row pour cette fonction
+            original_row_factory = self.connection.row_factory
+            self.connection.row_factory = sqlite3.Row
+            
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT 
+                    timestamp,
+                    level,
+                    message,
+                    module,
+                    session_id,
+                    request_id,
+                    user_ip,
+                    extra_data
+                FROM logs 
+                ORDER BY timestamp DESC 
+                LIMIT ?
+            """, (limit,))
+            
+            rows = cursor.fetchall()
+            logs = []
+            
+            for row in rows:
+                logs.append({
+                    "timestamp": row["timestamp"],
+                    "level": row["level"] or "INFO",
+                    "category": row["module"] or "system",
+                    "message": row["message"] or "",
+                    "details": row["extra_data"] or ""
+                })
+            
+            # Restaurer row_factory
+            self.connection.row_factory = original_row_factory
+            return logs
+            
+        except Exception as e:
+            # Restaurer row_factory en cas d'erreur
+            if 'original_row_factory' in locals():
+                self.connection.row_factory = original_row_factory
+            logging.error(f"❌ Erreur récupération logs récents: {e}")
+            return []
+
     
     # ====== Méthodes de gestion de configuration ======
     

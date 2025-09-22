@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🧪 Test du système de base de données et logs
+[TEST] Test du système de base de données et logs
 Test complet du système de logging et base de données
 """
 
@@ -12,7 +12,7 @@ from database import DatabaseManager, DailyLogManager, LogEntry, RequestEntry, E
 
 async def test_database_system():
     """Test complet du système de base de données"""
-    print("🧪 Test du système de base de données")
+    print("[TEST] Test du système de base de données")
     print("====================================")
     
     # Nettoyer les fichiers de test existants
@@ -25,10 +25,10 @@ async def test_database_system():
     db_manager = DatabaseManager("test_bridge.db")
     await db_manager.initialize()
     
-    print("✅ Base de données initialisée")
+    print("[OK] Base de données initialisée")
     
     # Test 1: Insertion de logs
-    print("\n📝 Test 1: Insertion de logs")
+    print("\n[NOTE] Test 1: Insertion de logs")
     
     test_logs = [
         LogEntry(
@@ -60,7 +60,7 @@ async def test_database_system():
         print(f"   Log inséré: ID {log_id} - {log.level} - {log.message[:50]}...")
     
     # Test 2: Insertion de requêtes
-    print("\n🌐 Test 2: Insertion de requêtes")
+    print("\n[WEB] Test 2: Insertion de requêtes")
     
     test_requests = [
         RequestEntry(
@@ -101,7 +101,7 @@ async def test_database_system():
         print(f"   Requête insérée: ID {req_id} - {req.method} {req.endpoint} - {req.status_code} ({req.response_time_ms}ms)")
     
     # Test 3: Insertion d'erreurs
-    print("\n❌ Test 3: Insertion d'erreurs")
+    print("\n[FAIL] Test 3: Insertion d'erreurs")
     
     test_errors = [
         ErrorEntry(
@@ -125,7 +125,7 @@ async def test_database_system():
         print(f"   Erreur insérée: ID {error_id} - {error.error_type} - {error.error_message}")
     
     # Test 4: Récupération des statistiques
-    print("\n📊 Test 4: Statistiques")
+    print("\n[STATS] Test 4: Statistiques")
     
     stats = await db_manager.get_stats(days=1)
     print(f"   Statistiques des dernières 24h:")
@@ -147,7 +147,7 @@ async def test_database_system():
             print(f"     - {endpoint['endpoint']}: {endpoint['count']} requêtes ({endpoint['avg_time']:.1f}ms moy.)")
     
     # Test 5: Test du gestionnaire de logs journaliers
-    print("\n📅 Test 5: Gestionnaire de logs journaliers")
+    print("\n[CALENDAR] Test 5: Gestionnaire de logs journaliers")
     
     log_manager = DailyLogManager("logs", db_manager)
     
@@ -167,7 +167,7 @@ async def test_database_system():
     print(f"   Logs importés: {imported_count}")
     
     # Test 6: Nettoyage des données anciennes
-    print("\n🧹 Test 6: Nettoyage (simulation)")
+    print("\n[EMOJI] Test 6: Nettoyage (simulation)")
     
     # Créer des données anciennes (simulées)
     old_date = (datetime.now() - timedelta(days=45)).isoformat()
@@ -203,7 +203,7 @@ async def test_database_system():
         print(f"     - Date limite: {cleanup_result['cutoff_date'][:10]}")
     
     # Test 7: Vérification de l'intégrité
-    print("\n🔍 Test 7: Vérification finale")
+    print("\n[SEARCH] Test 7: Vérification finale")
     
     # Compter les entrées restantes
     cursor = db_manager.connection.execute("SELECT COUNT(*) FROM logs")
@@ -223,12 +223,19 @@ async def test_database_system():
     # Fermer la connexion
     await db_manager.close()
     
-    # Nettoyer les fichiers de test
-    for file in ["test_bridge.db", str(test_log_file)]:
+    # Nettoyer les fichiers de test (en gérant les fichiers verrouillés)
+    cleanup_files = ["test_bridge.db", str(test_log_file)]
+    for file in cleanup_files:
         if os.path.exists(file):
-            os.remove(file)
+            try:
+                os.remove(file)
+                print(f"[EMOJI] Fichier nettoyé: {file}")
+            except PermissionError:
+                print(f"[WARN] Fichier verrouillé (normal si serveur actif): {file}")
+            except Exception as e:
+                print(f"[WARN] Impossible de supprimer {file}: {e}")
     
-    print("\n✅ Tous les tests réussis ! Système de base de données opérationnel.")
+    print("\n[OK] Tous les tests réussis ! Système de base de données opérationnel.")
     
     return True
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🧪 Test du système de cache et circuit breaker
+[TEST] Test du système de cache et circuit breaker
 Script de test pour valider les fonctionnalités de la Phase 2.4
 """
 
@@ -11,21 +11,21 @@ import time
 from datetime import datetime
 import sys
 
-BASE_URL = "http://localhost:3003"
+BASE_URL = "http://localhost:8080"
 
 def print_header(title: str):
     """Affiche un en-tête de section"""
     print(f"\n{'='*60}")
-    print(f"🧪 {title}")
+    print(f"[TEST] {title}")
     print(f"{'='*60}")
 
 def print_step(step: str):
     """Affiche une étape de test"""
-    print(f"\n➡️  {step}")
+    print(f"\n[ARROW]  {step}")
 
 def print_result(success: bool, message: str):
     """Affiche le résultat d'un test"""
-    icon = "✅" if success else "❌"
+    icon = "[OK]" if success else "[FAIL]"
     print(f"{icon} {message}")
 
 async def test_health_check():
@@ -196,30 +196,30 @@ async def test_metrics_endpoint():
             print_result(True, "Métriques récupérées avec succès")
             
             # Afficher les métriques importantes
-            print(f"\\n📊 MÉTRIQUES SYSTÈME:")
+            print(f"\\n[STATS] MÉTRIQUES SYSTÈME:")
             print(f"   Uptime: {metrics['uptime_seconds']:.1f}s")
             
-            print(f"\\n🧠 CACHE OUTILS:")
+            print(f"\\n[EMOJI] CACHE OUTILS:")
             tools_cache = metrics['tools_cache']
             print(f"   Taille: {tools_cache['size']}/{tools_cache['max_size']}")
             print(f"   Hits: {tools_cache['hits']}, Misses: {tools_cache['misses']}")
             print(f"   Taux de hit: {tools_cache['hit_rate_percent']}%")
             print(f"   TTL par défaut: {tools_cache['default_ttl']}s")
             
-            print(f"\\n💾 CACHE RÉPONSES:")
+            print(f"\\n[EMOJI] CACHE RÉPONSES:")
             resp_cache = metrics['response_cache']
             print(f"   Taille: {resp_cache['size']}/{resp_cache['max_size']}")
             print(f"   Hits: {resp_cache['hits']}, Misses: {resp_cache['misses']}")
             print(f"   Taux de hit: {resp_cache['hit_rate_percent']}%")
             
-            print(f"\\n🔌 CIRCUIT BREAKER:")
+            print(f"\\n[PLUG] CIRCUIT BREAKER:")
             cb = metrics['circuit_breaker']
             print(f"   État: {cb['state']}")
             print(f"   Disponible: {cb['is_available']}")
             print(f"   Requêtes totales: {cb['total_requests']}")
             print(f"   Taux de succès: {cb['success_rate_percent']}%")
             
-            print(f"\\n📋 GESTION SESSIONS:")
+            print(f"\\n[LIST] GESTION SESSIONS:")
             if 'session_management' in metrics:
                 sm = metrics['session_management']
                 print(f"   Sessions actives: {sm['active_sessions']}")
@@ -283,11 +283,11 @@ async def test_cache_management():
 async def main():
     """Fonction principale de test"""
     print_header("TEST PHASE 2.4 - CACHE L1 & CIRCUIT BREAKER")
-    print(f"🕒 Démarrage des tests: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"[TIME] Démarrage des tests: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
     # Test préliminaire
     if not await test_health_check():
-        print_result(False, "❌ SERVEUR INACCESSIBLE - ARRÊT DES TESTS")
+        print_result(False, "[FAIL] SERVEUR INACCESSIBLE - ARRÊT DES TESTS")
         return False
     
     # Tests principaux
@@ -313,17 +313,17 @@ async def main():
     passed_tests = sum(1 for _, result in results if result)
     
     for test_name, result in results:
-        status = "✅ PASSÉ" if result else "❌ ÉCHEC"
+        status = "[OK] PASSÉ" if result else "[FAIL] ÉCHEC"
         print(f"{status} - {test_name}")
     
-    print(f"\\n📊 RÉSULTAT FINAL: {passed_tests}/{total_tests} tests réussis")
+    print(f"\\n[STATS] RÉSULTAT FINAL: {passed_tests}/{total_tests} tests réussis")
     
     if passed_tests == total_tests:
-        print_result(True, "🎉 TOUS LES TESTS DE LA PHASE 2.4 SONT PASSÉS!")
-        print("🚀 Phase 2.4 (Cache L1 & Circuit Breaker) - TERMINÉE AVEC SUCCÈS")
+        print_result(True, "[PARTY] TOUS LES TESTS DE LA PHASE 2.4 SONT PASSÉS!")
+        print("[START] Phase 2.4 (Cache L1 & Circuit Breaker) - TERMINÉE AVEC SUCCÈS")
         return True
     else:
-        print_result(False, f"❌ {total_tests - passed_tests} tests ont échoué")
+        print_result(False, f"[FAIL] {total_tests - passed_tests} tests ont échoué")
         return False
 
 if __name__ == "__main__":

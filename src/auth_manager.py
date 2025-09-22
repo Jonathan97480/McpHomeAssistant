@@ -224,12 +224,18 @@ class AuthManager:
             # Récupérer le hash du mot de passe
             password_hash = await self._get_user_password_hash(user.id)
             if not password_hash:
+                logger.error(f"❌ No password hash found for user {user.username}")
                 return None
+            
+            logger.debug(f"🔍 Verifying password for user {user.username}")
             
             # Vérifier le mot de passe
             if not verify_password(password, password_hash):
+                logger.warning(f"❌ Password verification failed for user {user.username}")
                 await self._increment_failed_attempts(user.id)
                 return None
+            
+            logger.info(f"✅ Password verified for user {user.username}")
             
             # Réinitialiser les tentatives échouées
             await self._reset_failed_attempts(user.id)
@@ -249,6 +255,9 @@ class AuthManager:
                                  ip_address: Optional[str] = None) -> TokenResponse:
         """Crée une session utilisateur avec tokens JWT"""
         try:
+            # Nettoyer les anciennes sessions actives pour éviter les conflits de tokens
+            await self._cleanup_all_user_sessions(user.id)
+            
             # Créer les tokens
             access_token_expires = timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
             access_token = self._create_access_token(
@@ -278,7 +287,7 @@ class AuthManager:
                 (user.id, access_token, refresh_token, access_expires, refresh_expires, user_agent, ip_address, now, now)
             )
             
-            # Nettoyer les anciennes sessions
+            # Nettoyer les anciennes sessions expirées
             await self._cleanup_expired_sessions(user.id)
             
             logger.info(f"✅ Session created for user: {user.username}")
@@ -562,6 +571,14 @@ class AuthManager:
             await db_manager.execute(query, (now, now, user_id))
         except Exception as e:
             logger.error(f"❌ Failed to cleanup expired sessions: {e}")
+    
+    async def _cleanup_all_user_sessions(self, user_id: int):
+        """Nettoie toutes les sessions actives d'un utilisateur pour éviter les conflits de tokens"""
+        try:
+            query = "UPDATE user_sessions SET is_active = 0 WHERE user_id = ? AND is_active = 1"
+            await db_manager.execute(query, (user_id,))
+        except Exception as e:
+            logger.error(f"❌ Failed to cleanup all user sessions: {e}")
 
 
 # Instance globale du gestionnaire d'authentification

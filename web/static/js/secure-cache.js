@@ -76,26 +76,17 @@ class SecureClientCache {
      * Stocke des données sensibles (chiffrées)
      */
     setSecure(key, data) {
-        console.group(`🔒 setSecure(${key})`);
-        console.log('Input data:', data);
-
         try {
             const encrypted = this.encrypt(data);
-            console.log('Encrypted data length:', encrypted.length);
-
             this.encrypted.set(key, encrypted);
-            console.log('Storage successful, encrypted cache size:', this.encrypted.size);
-            console.log('All encrypted keys:', Array.from(this.encrypted.keys()));
 
             // 💾 Sauvegarder immédiatement dans sessionStorage
             this.saveToSession();
 
             console.log(`🔒 Données sécurisées stockées: ${key}`);
-            console.groupEnd();
             return true;
         } catch (error) {
             console.error('Erreur stockage sécurisé:', error);
-            console.groupEnd();
             return false;
         }
     }    /**
@@ -108,23 +99,17 @@ class SecureClientCache {
 
         try {
             const encrypted = this.encrypted.get(key);
-            console.log('Encrypted data found:', !!encrypted);
 
             if (!encrypted) {
-                console.log('No encrypted data found for key:', key);
-                console.groupEnd();
+                console.log(`🔓 Aucune donnée pour: ${key}`);
                 return null;
             }
 
             const decrypted = this.decrypt(encrypted);
-            console.log('Decryption successful:', !!decrypted);
-            console.log('Decrypted data:', decrypted);
-            console.log(`🔓 Données sécurisées récupérées: ${key}`);
-            console.groupEnd();
+            console.log(`🔓 Données récupérées: ${key}`);
             return decrypted;
         } catch (error) {
             console.error('Erreur récupération sécurisée:', error);
-            console.groupEnd();
             return null;
         }
     }
@@ -338,7 +323,10 @@ class SecureClientCache {
             };
 
             sessionStorage.setItem('secureCache_backup', JSON.stringify(backup));
-            console.log(`💾 Sauvegarde sessionStorage: ${this.encrypted.size} entrées`);
+            // Log réduit pour éviter la verbosité
+            if (this.encrypted.size % 5 === 0 || this.encrypted.size <= 1) {
+                console.log(`💾 Cache: ${this.encrypted.size} entrées`);
+            }
         } catch (error) {
             console.warn('⚠️ Erreur sauvegarde sessionStorage:', error);
         }

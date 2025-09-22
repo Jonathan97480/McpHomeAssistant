@@ -58,7 +58,8 @@ class MCPDashboard {
         // Vérifier l'authentification pour les pages protégées
         if (!this.token) {
             console.log('🔒 Aucun token trouvé, redirection vers login');
-            this.redirectToLogin();
+            // Petite temporisation pour éviter les redirections immédiates
+            setTimeout(() => this.redirectToLogin(), 100);
             return;
         }
 
@@ -67,7 +68,8 @@ class MCPDashboard {
             if (!isValid) {
                 console.log('🔒 Token invalide, redirection vers login');
                 this.clearAuthData();
-                this.redirectToLogin();
+                // Petite temporisation pour éviter les redirections immédiates
+                setTimeout(() => this.redirectToLogin(), 100);
                 return;
             }
 
@@ -242,7 +244,10 @@ class MCPDashboard {
 
             if (!response.ok) {
                 if (response.status === 401) {
-                    this.redirectToLogin();
+                    // Ne pas rediriger automatiquement pour certains endpoints
+                    if (!options.skipAutoRedirect) {
+                        this.redirectToLogin();
+                    }
                     return null;
                 }
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -251,7 +256,9 @@ class MCPDashboard {
             return await response.json();
         } catch (error) {
             console.error(`❌ Erreur API ${endpoint}:`, error);
-            this.showNotification('Erreur de connexion', 'error');
+            if (!options.skipNotification) {
+                this.showNotification('Erreur de connexion', 'error');
+            }
             return null;
         }
     }
@@ -323,6 +330,12 @@ class MCPDashboard {
     }
 
     redirectToLogin() {
+        // Éviter les redirections en boucle
+        if (window.location.pathname === '/login') {
+            console.log('🔄 Déjà sur la page login, éviter la redirection');
+            return;
+        }
+        console.log('🔀 Redirection vers login');
         window.location.href = '/login';
     }
 
@@ -438,6 +451,9 @@ class MCPDashboard {
 
             // Exécuter les scripts dans le contenu chargé
             this.executeScripts(content);
+
+            // Charger les données spécifiques à la page
+            await this.loadPageData(path);
 
             this.currentPage = path.replace('/', '') || 'dashboard';
 
@@ -558,13 +574,26 @@ class MCPDashboard {
         if (!content) return;
 
         // Charger les métriques du dashboard
-        const [status, stats, sessions] = await Promise.all([
+        const [status, stats, metrics] = await Promise.all([
             this.apiCall('/mcp/status'),
             this.apiCall('/admin/stats'),
-            this.apiCall('/auth/sessions')
+            this.apiCall('/api/metrics')
         ]);
 
-        content.innerHTML = this.renderDashboard(status, stats, sessions);
+        // Récupérer les sessions de manière sécurisée
+        let sessions = [];
+        try {
+            const sessionsResponse = await this.apiCall('/auth/sessions', {
+                skipAutoRedirect: true,
+                skipNotification: true
+            });
+            sessions = sessionsResponse?.sessions || [];
+        } catch (error) {
+            console.warn('⚠️ Impossible de récupérer les sessions:', error);
+            sessions = []; // Valeur par défaut
+        }
+
+        content.innerHTML = this.renderDashboard(status, stats, metrics, sessions);
         this.currentPage = 'dashboard';
     }
 
@@ -616,12 +645,461 @@ class MCPDashboard {
         const content = document.getElementById('main-content');
         if (!content) return;
 
-        const logs = await this.apiCall('/admin/logs');
+        const logs = await this.apiCall('/api/logs');
         content.innerHTML = this.renderLogs(logs);
         this.currentPage = 'logs';
     }
 
-    renderDashboard(status, stats, sessions) {
+    async loadPageData(path) {
+        try {
+            switch (path) {
+                case '/tools':
+                    await this.loadTools();
+                    break;
+                case '/logs':
+                    await this.loadLogsData();
+                    break;
+                // Ajouter d'autres pages spéciales si nécessaire
+                default:
+                    break;
+            }
+        } catch (error) {
+            console.error('Erreur lors du chargement des données de la page:', error);
+        }
+    }
+
+    async loadTools() {
+        console.log('🔧 Chargement des outils MCP...');
+
+        try {
+            // Initialiser une session MCP d'abord
+            const mcpSession = await this.initializeMCPSession();
+
+            if (mcpSession && mcpSession.session_id) {
+                // Charger la liste des outils avec la session
+                const tools = await this.getMCPTools(mcpSession.session_id);
+
+                // Mettre à jour l'interface avec les outils
+                this.updateToolsInterface(tools);
+
+                // Configurer les event listeners pour les outils
+                this.setupToolsEventListeners();
+            } else {
+                // Fallback: utiliser l'API tools qui retourne des données d'exemple
+                const tools = await this.apiCall('/api/tools');
+                this.updateToolsInterface(tools);
+                this.setupToolsEventListeners();
+            }
+        } catch (error) {
+            console.error('❌ Erreur lors du chargement des outils MCP:', error);
+            this.showNotification('Erreur lors du chargement des outils MCP', 'error');
+
+            // Afficher une interface vide avec message d'erreur
+            this.updateToolsInterface([]);
+        }
+    }
+
+    async initializeMCPSession() {
+        try {
+            const response = await this.apiCall('/mcp/initialize', {
+                method: 'POST',
+                body: JSON.stringify({
+                    serverName: 'home-assistant',
+                    client_info: {
+                        name: 'web-interface',
+                        version: '1.0.0'
+                    }
+                })
+            });
+
+            if (response && response.result) {
+                return response.result;
+            }
+        } catch (error) {
+            console.warn('⚠️ Impossible d\'initialiser la session MCP:', error);
+        }
+        return null;
+    }
+
+    async getMCPTools(sessionId) {
+        try {
+            const response = await this.apiCall('/mcp/tools/list', {
+                method: 'POST',
+                headers: {
+                    'X-Session-ID': sessionId
+                },
+                body: JSON.stringify({})
+            });
+
+            if (response && response.result && response.result.tools) {
+                return response.result.tools;
+            }
+        } catch (error) {
+            console.warn('⚠️ Impossible de récupérer les outils MCP:', error);
+        }
+        return [];
+    }
+
+    updateToolsInterface(tools) {
+        // Mettre à jour les statistiques
+        const totalCount = tools.length;
+        const activeCount = tools.filter(tool => tool.status !== 'inactive').length;
+        const totalUsage = tools.reduce((sum, tool) => sum + (tool.usage_count || 0), 0);
+        const avgResponseTime = tools.length > 0 ?
+            Math.round(tools.reduce((sum, tool) => sum + (tool.avg_response_time || 0), 0) / tools.length) : 0;
+
+        // Mettre à jour les éléments du DOM
+        const updateElement = (id, value) => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = value;
+        };
+
+        updateElement('total-tools-count', totalCount);
+        updateElement('active-tools-count', activeCount);
+        updateElement('total-usage-count', totalUsage);
+        updateElement('avg-response-time', `${avgResponseTime}ms`);
+
+        // Mettre à jour la liste des outils
+        const toolsList = document.getElementById('tools-list');
+        if (toolsList) {
+            if (tools.length === 0) {
+                toolsList.innerHTML = `
+                    <div class="card">
+                        <div class="card-body text-center py-8">
+                            <div class="text-6xl mb-4">🔧</div>
+                            <h3 class="text-xl font-semibold mb-2">Aucun outil disponible</h3>
+                            <p class="text-secondary">Les outils MCP seront affichés ici une fois configurés.</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                toolsList.innerHTML = tools.map(tool => this.renderToolCard(tool)).join('');
+            }
+        }
+    }
+
+    renderToolCard(tool) {
+        const statusClass = {
+            'active': 'text-green-600',
+            'inactive': 'text-gray-500',
+            'error': 'text-red-600'
+        }[tool.status] || 'text-gray-500';
+
+        const statusIcon = {
+            'active': '✅',
+            'inactive': '⏸️',
+            'error': '❌'
+        }[tool.status] || '❓';
+
+        return `
+            <div class="card mb-4 tool-card" data-tool-id="${tool.name || tool.id}">
+                <div class="card-body">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <h4 class="text-lg font-semibold">${tool.name || tool.id}</h4>
+                            <p class="text-secondary text-sm">${tool.description || 'Aucune description'}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="${statusClass}">${statusIcon}</span>
+                            <button class="btn btn-sm btn-primary" onclick="dashboard.testTool('${tool.name || tool.id}')">
+                                🧪 Tester
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-4 text-sm">
+                        <div>
+                            <span class="text-secondary">Catégorie:</span>
+                            <span class="ml-1">${tool.category || 'général'}</span>
+                        </div>
+                        <div>
+                            <span class="text-secondary">Utilisations:</span>
+                            <span class="ml-1">${tool.usage_count || 0}</span>
+                        </div>
+                        <div>
+                            <span class="text-secondary">Dernière utilisation:</span>
+                            <span class="ml-1">${tool.last_used ? new Date(tool.last_used).toLocaleDateString() : 'Jamais'}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    setupToolsEventListeners() {
+        // Bouton actualiser
+        const refreshBtn = document.getElementById('refresh-tools');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => this.loadTools());
+        }
+
+        // Bouton tester tout
+        const testAllBtn = document.getElementById('test-all-tools');
+        if (testAllBtn) {
+            testAllBtn.addEventListener('click', () => this.testAllTools());
+        }
+
+        // Recherche et filtres
+        const searchInput = document.getElementById('search-tools');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => this.filterTools());
+        }
+
+        const categoryFilter = document.getElementById('filter-category');
+        if (categoryFilter) {
+            categoryFilter.addEventListener('change', () => this.filterTools());
+        }
+
+        const statusFilter = document.getElementById('filter-status');
+        if (statusFilter) {
+            statusFilter.addEventListener('change', () => this.filterTools());
+        }
+
+        const clearFiltersBtn = document.getElementById('clear-filters');
+        if (clearFiltersBtn) {
+            clearFiltersBtn.addEventListener('click', () => this.clearToolsFilters());
+        }
+    }
+
+    filterTools() {
+        const searchTerm = document.getElementById('search-tools')?.value.toLowerCase() || '';
+        const categoryFilter = document.getElementById('filter-category')?.value || '';
+        const statusFilter = document.getElementById('filter-status')?.value || '';
+
+        const toolCards = document.querySelectorAll('.tool-card');
+
+        toolCards.forEach(card => {
+            const toolName = card.querySelector('h4').textContent.toLowerCase();
+            const toolDescription = card.querySelector('p').textContent.toLowerCase();
+            const toolCategory = card.querySelector('.text-secondary').textContent.toLowerCase();
+
+            const matchesSearch = searchTerm === '' ||
+                toolName.includes(searchTerm) ||
+                toolDescription.includes(searchTerm);
+
+            const matchesCategory = categoryFilter === '' || toolCategory.includes(categoryFilter);
+
+            // Le statut est plus complexe à extraire, on le simplifie pour cet exemple
+            const matchesStatus = statusFilter === '';
+
+            if (matchesSearch && matchesCategory && matchesStatus) {
+                card.style.display = 'block';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+
+    clearToolsFilters() {
+        document.getElementById('search-tools').value = '';
+        document.getElementById('filter-category').value = '';
+        document.getElementById('filter-status').value = '';
+        this.filterTools();
+    }
+
+    async testTool(toolId) {
+        console.log(`🧪 Test de l'outil: ${toolId}`);
+        this.showNotification(`Test de l'outil ${toolId} lancé`, 'info');
+        // TODO: Implémenter le test d'outil
+    }
+
+    async testAllTools() {
+        console.log('🧪 Test de tous les outils');
+        this.showNotification('Test de tous les outils lancé', 'info');
+        // TODO: Implémenter le test de tous les outils
+    }
+
+    async loadLogsData() {
+        console.log('📄 Chargement des logs...');
+
+        try {
+            // Récupérer les logs via l'API
+            const logsResponse = await this.apiCall('/api/logs');
+
+            if (logsResponse && logsResponse.logs) {
+                // Mettre à jour les statistiques des logs
+                this.updateLogsStats(logsResponse.stats || {});
+
+                // Mettre à jour la liste des logs
+                this.updateLogsList(logsResponse.logs);
+
+                // Configurer les event listeners pour les logs
+                this.setupLogsEventListeners();
+            } else {
+                console.warn('⚠️ Aucun log récupéré');
+                this.updateLogsStats({});
+                this.updateLogsList([]);
+            }
+        } catch (error) {
+            console.error('❌ Erreur lors du chargement des logs:', error);
+            this.showNotification('Erreur lors du chargement des logs', 'error');
+
+            // Afficher une interface vide avec message d'erreur
+            this.updateLogsStats({});
+            this.updateLogsList([]);
+        }
+    }
+
+    updateLogsStats(stats) {
+        // Mettre à jour les statistiques des logs
+        const updateElement = (id, value) => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = value;
+        };
+
+        updateElement('total-logs-count', stats.total_logs || 0);
+        updateElement('error-logs-count', stats.errors || 0);
+        updateElement('warning-logs-count', stats.warnings || 0);
+        updateElement('logs-size-mb', stats.size_mb ? `${stats.size_mb} MB` : '0 MB');
+    }
+
+    updateLogsList(logs) {
+        const logsList = document.getElementById('logs-list');
+        if (!logsList) return;
+
+        if (logs.length === 0) {
+            logsList.innerHTML = `
+                <div class="card">
+                    <div class="card-body text-center py-8">
+                        <div class="text-6xl mb-4">📄</div>
+                        <h3 class="text-xl font-semibold mb-2">Aucun log disponible</h3>
+                        <p class="text-secondary">Les logs système apparaîtront ici.</p>
+                    </div>
+                </div>
+            `;
+        } else {
+            logsList.innerHTML = logs.map(log => this.renderLogEntry(log)).join('');
+        }
+    }
+
+    renderLogEntry(log) {
+        const levelClass = {
+            'ERROR': 'text-red-600 bg-red-50',
+            'WARNING': 'text-yellow-600 bg-yellow-50',
+            'INFO': 'text-blue-600 bg-blue-50',
+            'DEBUG': 'text-gray-600 bg-gray-50'
+        }[log.level] || 'text-gray-600 bg-gray-50';
+
+        const levelIcon = {
+            'ERROR': '❌',
+            'WARNING': '⚠️',
+            'INFO': 'ℹ️',
+            'DEBUG': '🔍'
+        }[log.level] || 'ℹ️';
+
+        return `
+            <div class="card mb-2 log-entry" data-level="${log.level}" data-category="${log.category}">
+                <div class="card-body py-3">
+                    <div class="flex justify-between items-start">
+                        <div class="flex items-start gap-3 flex-1">
+                            <span class="text-lg">${levelIcon}</span>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="px-2 py-1 rounded text-xs font-medium ${levelClass}">
+                                        ${log.level}
+                                    </span>
+                                    <span class="text-xs text-secondary">${log.category}</span>
+                                    <span class="text-xs text-secondary">${this.formatLogTimestamp(log.timestamp)}</span>
+                                </div>
+                                <p class="text-sm">${log.message}</p>
+                                ${log.details && log.details !== log.message ? `
+                                    <details class="mt-2">
+                                        <summary class="text-xs text-secondary cursor-pointer">Détails</summary>
+                                        <pre class="text-xs bg-gray-100 p-2 rounded mt-1 overflow-x-auto">${log.details}</pre>
+                                    </details>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    formatLogTimestamp(timestamp) {
+        try {
+            const date = new Date(timestamp);
+            return date.toLocaleString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        } catch {
+            return timestamp;
+        }
+    }
+
+    setupLogsEventListeners() {
+        // Bouton actualiser
+        const refreshBtn = document.getElementById('refresh-logs');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => this.loadLogsData());
+        }
+
+        // Bouton effacer
+        const clearBtn = document.getElementById('clear-logs');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => this.clearLogs());
+        }
+
+        // Filtres de logs
+        const levelFilter = document.getElementById('filter-log-level');
+        if (levelFilter) {
+            levelFilter.addEventListener('change', () => this.filterLogs());
+        }
+
+        const categoryFilter = document.getElementById('filter-log-category');
+        if (categoryFilter) {
+            categoryFilter.addEventListener('change', () => this.filterLogs());
+        }
+
+        const searchInput = document.getElementById('search-logs');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => this.filterLogs());
+        }
+    }
+
+    filterLogs() {
+        const levelFilter = document.getElementById('filter-log-level')?.value || '';
+        const categoryFilter = document.getElementById('filter-log-category')?.value || '';
+        const searchTerm = document.getElementById('search-logs')?.value.toLowerCase() || '';
+
+        const logEntries = document.querySelectorAll('.log-entry');
+
+        logEntries.forEach(entry => {
+            const level = entry.dataset.level;
+            const category = entry.dataset.category;
+            const text = entry.textContent.toLowerCase();
+
+            const matchesLevel = levelFilter === '' || level === levelFilter;
+            const matchesCategory = categoryFilter === '' || category.includes(categoryFilter);
+            const matchesSearch = searchTerm === '' || text.includes(searchTerm);
+
+            if (matchesLevel && matchesCategory && matchesSearch) {
+                entry.style.display = 'block';
+            } else {
+                entry.style.display = 'none';
+            }
+        });
+    }
+
+    async clearLogs() {
+        if (confirm('Êtes-vous sûr de vouloir effacer tous les logs ?')) {
+            try {
+                await this.apiCall('/api/logs/clear', { method: 'DELETE' });
+                this.showNotification('Logs effacés avec succès', 'success');
+                await this.loadLogsData();
+            } catch (error) {
+                console.error('❌ Erreur lors de l\'effacement des logs:', error);
+                this.showNotification('Erreur lors de l\'effacement des logs', 'error');
+            }
+        }
+    }
+
+    renderDashboard(status, stats, metrics, sessions = []) {
         return `
             <div class="fade-in">
                 <div class="header-content mb-3">
@@ -635,25 +1113,25 @@ class MCPDashboard {
                 <div class="grid grid-cols-4 mb-3">
                     <div class="card stat-card">
                         <div class="card-content">
-                            <div class="stat-value">${status?.sessions?.total || 0}</div>
+                            <div class="stat-value">${metrics?.active_connections || 0}</div>
                             <div class="stat-label">Sessions actives</div>
                         </div>
                     </div>
                     <div class="card stat-card">
                         <div class="card-content">
-                            <div class="stat-value">${stats?.total_requests || 0}</div>
+                            <div class="stat-value">${stats?.data?.requests?.total_requests || 0}</div>
                             <div class="stat-label">Requêtes totales</div>
                         </div>
                     </div>
                     <div class="card stat-card">
                         <div class="card-content">
-                            <div class="stat-value">${stats?.active_users || 0}</div>
+                            <div class="stat-value">${stats?.data?.requests?.unique_sessions || 0}</div>
                             <div class="stat-label">Utilisateurs actifs</div>
                         </div>
                     </div>
                     <div class="card stat-card">
                         <div class="card-content">
-                            <div class="stat-value">${stats?.uptime || '0s'}</div>
+                            <div class="stat-value">${metrics?.uptime ? this.formatUptime(metrics.uptime) : '0s'}</div>
                             <div class="stat-label">Uptime</div>
                         </div>
                     </div>
@@ -849,6 +1327,16 @@ class MCPDashboard {
         if (loader) {
             loader.style.display = show ? 'block' : 'none';
         }
+    }
+
+    /**
+     * 🕐 Formate l'uptime en secondes vers un format lisible
+     */
+    formatUptime(seconds) {
+        if (seconds < 60) return `${seconds}s`;
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+        return `${Math.floor(seconds / 86400)}j`;
     }
 }
 

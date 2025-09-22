@@ -8,6 +8,8 @@ import asyncio
 import json
 import uuid
 import time
+import re
+import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, asdict
@@ -66,8 +68,13 @@ async def initialize_mcp_server():
     global mcp_server, ha_client
     
     try:
-        # Importer les modules MCP
-        from src.homeassistant_mcp_server.server import HomeAssistantClient
+        # Importer les modules MCP avec import robuste
+        try:
+            from src.homeassistant_mcp_server.server import HomeAssistantClient
+        except ImportError:
+            # Fallback si on est déjà dans src/
+            from homeassistant_mcp_server.server import HomeAssistantClient
+            
         from mcp.server import Server
         from dotenv import load_dotenv
         
@@ -731,16 +738,16 @@ app = FastAPI(
 )
 
 # Configuration des templates et fichiers statiques
-templates = Jinja2Templates(directory="web/templates")
+templates = Jinja2Templates(directory="../web/templates")
 
 # Monter les fichiers statiques
-app.mount("/static", StaticFiles(directory="web/static"), name="static")
+app.mount("/static", StaticFiles(directory="../web/static"), name="static")
 
 # Route spécifique pour favicon
 @app.get("/favicon.ico")
 async def favicon():
     """Retourne le favicon du site"""
-    return FileResponse("web/static/favicon.svg", media_type="image/svg+xml")
+    return FileResponse("../web/static/favicon.svg", media_type="image/svg+xml")
 
 # CORS Middleware
 app.add_middleware(
@@ -783,7 +790,7 @@ def setup_logging():
     
     # Logger principal
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     
     # Formateur
     formatter = logging.Formatter(
@@ -797,12 +804,12 @@ def setup_logging():
         encoding='utf-8'
     )
     file_handler.setFormatter(formatter)
-    file_handler.setLevel(logging.INFO)
+    file_handler.setLevel(logging.DEBUG)
     
     # Handler pour console  
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
     
     # Handler pour base de données
     db_handler = DatabaseLogHandler()
@@ -1535,10 +1542,10 @@ async def get_metrics():
         
         # Ajouter les métriques de session
         session_stats = {
-            'active_sessions': len(session_pool.sessions),
-            'total_requests_processed': session_pool.total_requests,
-            'queue_size': request_queue.size,
-            'queue_stats': request_queue.get_stats()
+            'active_sessions': len(session_pool.sessions) if session_pool and hasattr(session_pool, 'sessions') else 0,
+            'total_requests_processed': getattr(session_pool, 'total_requests', 0) if session_pool else 0,
+            'queue_size': getattr(request_queue, 'size', 0) if request_queue else 0,
+            'queue_stats': request_queue.get_stats() if request_queue and hasattr(request_queue, 'get_stats') else {}
         }
         metrics['session_management'] = session_stats
         
@@ -1585,6 +1592,36 @@ async def manual_cleanup(days_to_keep: int = 30):
         logger.error(f"Erreur nettoyage manuel: {e}")
         return JSONResponse({
             "status": "error", 
+            "message": str(e)
+        }, status_code=500)
+
+
+@app.post("/admin/shutdown")
+async def shutdown_server():
+    """Arrêt propre du serveur (pour les tests)"""
+    import signal
+    import asyncio
+    
+    try:
+        logger.info("🛑 Demande d'arrêt du serveur reçue")
+        
+        # Programmer l'arrêt dans 1 seconde pour laisser le temps de répondre
+        def delayed_shutdown():
+            logger.info("🔌 Arrêt du serveur...")
+            os.kill(os.getpid(), signal.SIGTERM)
+        
+        # Utiliser asyncio pour programmer l'arrêt
+        asyncio.get_event_loop().call_later(1.0, delayed_shutdown)
+        
+        return JSONResponse({
+            "status": "success",
+            "message": "Arrêt du serveur programmé"
+        })
+        
+    except Exception as e:
+        logger.error(f"Erreur lors de l'arrêt: {e}")
+        return JSONResponse({
+            "status": "error",
             "message": str(e)
         }, status_code=500)
 
@@ -1989,18 +2026,9 @@ async def manual_log_rotation():
 
 # 🌐 Routes Web Interface
 @app.get("/", response_class=HTMLResponse)
-async def root():
-    """Redirection vers le dashboard"""
-    return HTMLResponse("""
-    <html>
-        <head>
-            <meta http-equiv="refresh" content="0; url=/login">
-        </head>
-        <body>
-            <p>Redirection vers le dashboard...</p>
-        </body>
-    </html>
-    """)
+async def root(request: Request):
+    """Route principale - sert le dashboard directement"""
+    return templates.TemplateResponse("dashboard.html", {"request": request})
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
@@ -2047,7 +2075,7 @@ async def admin_page(request: Request):
 async def get_dashboard_overview():
     """Retourne le template de vue d'ensemble du dashboard"""
     try:
-        with open("web/templates/dashboard_overview.html", "r", encoding="utf-8") as f:
+        with open("../web/templates/dashboard_overview.html", "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Template non trouvé")
@@ -2056,7 +2084,7 @@ async def get_dashboard_overview():
 async def get_permissions_template():
     """Retourne le template de gestion des permissions"""
     try:
-        with open("web/templates/permissions.html", "r", encoding="utf-8") as f:
+        with open("../web/templates/permissions.html", "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Template non trouvé")
@@ -2065,7 +2093,7 @@ async def get_permissions_template():
 async def get_config_template():
     """Retourne le template de configuration"""
     try:
-        with open("web/templates/config.html", "r", encoding="utf-8") as f:
+        with open("../web/templates/config.html", "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Template non trouvé")
@@ -2074,7 +2102,7 @@ async def get_config_template():
 async def get_tools_template():
     """Retourne le template des outils MCP"""
     try:
-        with open("web/templates/tools.html", "r", encoding="utf-8") as f:
+        with open("../web/templates/tools.html", "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Template non trouvé")
@@ -2083,7 +2111,7 @@ async def get_tools_template():
 async def get_logs_template():
     """Retourne le template des logs"""
     try:
-        with open("web/templates/logs.html", "r", encoding="utf-8") as f:
+        with open("../web/templates/logs.html", "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Template non trouvé")
@@ -2092,7 +2120,7 @@ async def get_logs_template():
 async def get_admin_template():
     """Retourne le template d'administration"""
     try:
-        with open("web/templates/admin.html", "r", encoding="utf-8") as f:
+        with open("../web/templates/admin.html", "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Template non trouvé")
@@ -2106,8 +2134,18 @@ async def get_dashboard_metrics():
         active_connections = len(session_pool.get_active_sessions()) if session_pool else 0
         
         # Compter les outils MCP disponibles (utiliser la fonction get_tools existante)
-        tools_data = await get_tools()
-        total_tools = len(tools_data) if tools_data else 0
+        try:
+            tools_data = await get_tools()
+            # S'assurer que tools_data est itérable et calculer la longueur
+            if isinstance(tools_data, list):
+                total_tools = len(tools_data)
+            elif isinstance(tools_data, dict) and 'tools' in tools_data:
+                total_tools = len(tools_data['tools'])
+            else:
+                total_tools = 0 if tools_data is None else len(tools_data) if hasattr(tools_data, '__len__') else 0
+        except Exception as e:
+            logger.warning(f"Erreur récupération outils: {e}")
+            total_tools = 3  # Valeur par défaut
         
         # Calculer l'uptime
         if hasattr(app.state, 'start_time'):
@@ -2215,7 +2253,7 @@ async def get_config():
     try:
         # 1. Essayer de récupérer depuis la base de données en priorité
         db_config = await db_manager.get_user_ha_config("beroute")
-        logger.info(f"🔍 Configuration BDD récupérée: {db_config}")
+        logger.info(f"🔍 Configuration BDD récupérée: {bool(db_config)}")
         
         if db_config:
             # Configuration trouvée en base de données
@@ -2224,11 +2262,14 @@ async def get_config():
             source = "database"
             logger.info(f"✅ Utilisation configuration BDD: {hass_url}")
         else:
-            # Fallback sur les variables d'environnement
+            # Encourager l'utilisation de la configuration via l'interface web
             hass_url = os.getenv("HASS_URL", os.getenv("HOMEASSISTANT_URL", ""))
             hass_token = os.getenv("HASS_TOKEN", os.getenv("HOMEASSISTANT_TOKEN", ""))
             source = "environment"
-            logger.info(f"⚠️ Fallback sur environnement: {hass_url}")
+            if hass_url and hass_token:
+                logger.warning(f"⚠️ Configuration depuis variables d'environnement. Recommandation: Configurez via l'interface web pour une meilleure sécurité")
+            else:
+                logger.info(f"ℹ️ Aucune configuration trouvée. Veuillez configurer Home Assistant via l'interface web.")
         
         # Format attendu par le frontend (clés directes)
         config = {
@@ -2749,36 +2790,131 @@ async def get_logs(
     end_date: str = None
 ):
     """Retourne les logs du système avec pagination et filtrage"""
-    # Simulation de logs
-    logs = []
-    for i in range(limit):
-        log_entry = {
-            "id": f"log_{page}_{i}",
-            "timestamp": (datetime.now() - timedelta(minutes=i*5)).isoformat(),
-            "level": ["INFO", "ERROR", "WARNING", "DEBUG"][i % 4],
-            "category": ["homeassistant", "mcp", "database", "auth"][i % 4],
-            "message": f"Message de log d'exemple {i+1}",
-            "details": f"Détails supplémentaires pour le log {i+1}"
+    try:
+        # Chemin vers les fichiers de logs
+        log_dir = "../logs"
+        today = datetime.now().strftime("%Y-%m-%d")
+        log_file = f"{log_dir}/bridge_{today}.log"
+        
+        logs = []
+        
+        # Lire les logs depuis le fichier
+        if os.path.exists(log_file):
+            with open(log_file, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                
+            # Parser les dernières lignes (les plus récentes en premier)
+            for i, line in enumerate(reversed(lines[-1000:])):  # Limiter à 1000 dernières lignes
+                line = line.strip()
+                if not line:
+                    continue
+                    
+                try:
+                    # Parser le format: 2025-09-22 14:23:06,190 - module - LEVEL - message
+                    parts = line.split(" - ", 3)
+                    if len(parts) >= 3:
+                        timestamp_str = parts[0]
+                        module = parts[1] if len(parts) > 1 else "unknown"
+                        level_and_message = parts[2] if len(parts) > 2 else ""
+                        message = parts[3] if len(parts) > 3 else level_and_message
+                        
+                        # Extraire le niveau de log
+                        level_match = re.search(r'(DEBUG|INFO|WARNING|ERROR|CRITICAL)', level_and_message)
+                        log_level = level_match.group(1) if level_match else "INFO"
+                        
+                        # Si le message est dans la partie niveau, l'extraire
+                        if len(parts) == 3:
+                            message = re.sub(r'^(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s*-\s*', '', level_and_message)
+                        
+                        log_entry = {
+                            "id": f"log_{i}",
+                            "timestamp": timestamp_str,
+                            "level": log_level,
+                            "category": module,
+                            "message": message,
+                            "details": line  # Ligne complète comme détails
+                        }
+                        
+                        # Appliquer les filtres
+                        if level and log_level != level.upper():
+                            continue
+                        if category and category.lower() not in module.lower():
+                            continue
+                        if search and search.lower() not in message.lower():
+                            continue
+                            
+                        logs.append(log_entry)
+                        
+                        # Limiter le nombre de logs retournés
+                        if len(logs) >= limit:
+                            break
+                            
+                except Exception as e:
+                    # Si on ne peut pas parser une ligne, l'ajouter telle quelle
+                    logs.append({
+                        "id": f"log_raw_{i}",
+                        "timestamp": datetime.now().isoformat(),
+                        "level": "INFO", 
+                        "category": "raw",
+                        "message": line,
+                        "details": line
+                    })
+        
+        # Si pas de logs ou fichier inexistant, retourner des logs système récents de la base de données
+        if not logs:
+            logs = await get_database_logs(limit)
+            
+        # Pagination des résultats
+        start_idx = (page - 1) * limit
+        paginated_logs = logs[start_idx:start_idx + limit]
+        
+        return {
+            "logs": paginated_logs,
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total": len(logs),
+                "pages": (len(logs) + limit - 1) // limit
+            },
+            "stats": {
+                "total_logs": len(logs),
+                "errors": sum(1 for log in logs if log["level"] == "ERROR"),
+                "warnings": sum(1 for log in logs if log["level"] == "WARNING"),
+                "size_mb": round(os.path.getsize(log_file) / (1024 * 1024), 2) if os.path.exists(log_file) else 0
+            }
         }
-        logs.append(log_entry)
-    
-    # Filtrage simulé
-    if level:
-        logs = [log for log in logs if log["level"] == level.upper()]
-    if category:
-        logs = [log for log in logs if log["category"] == category]
-    if search:
-        logs = [log for log in logs if search.lower() in log["message"].lower()]
-    
-    return {
-        "logs": logs,
-        "pagination": {
-            "page": page,
-            "limit": limit,
-            "total": 1500,
-            "pages": 30
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur lors de la récupération des logs: {e}")
+        return {
+            "logs": [],
+            "pagination": {"page": page, "limit": limit, "total": 0, "pages": 0},
+            "stats": {"total_logs": 0, "errors": 0, "warnings": 0, "size_mb": 0},
+            "error": str(e)
         }
-    }
+
+async def get_database_logs(limit: int = 50):
+    """Récupère les logs depuis la base de données comme fallback"""
+    try:
+        # Utiliser le gestionnaire de base de données existant
+        logs_data = await db_manager.get_recent_logs(limit)
+        logs = []
+        
+        for i, log_data in enumerate(logs_data):
+            logs.append({
+                "id": f"db_log_{i}",
+                "timestamp": log_data.get("timestamp", datetime.now().isoformat()),
+                "level": log_data.get("level", "INFO"),
+                "category": log_data.get("category", "database"),
+                "message": log_data.get("message", ""),
+                "details": log_data.get("details", "")
+            })
+            
+        return logs
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur lors de la récupération des logs BDD: {e}")
+        return []
 
 @app.get("/api/logs/export")
 async def export_logs(format: str = "json"):
